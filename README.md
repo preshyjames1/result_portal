@@ -300,3 +300,5 @@ See `.env.local.example` for the full list with descriptions.
 ## License
 
 Proprietary — Rehoboth College. All rights reserved.
+
+ghjj
