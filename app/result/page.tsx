@@ -16,43 +16,57 @@ interface StudentData {
 export default function ResultPage() {
   const router = useRouter();
   const [student, setStudent] = useState<StudentData | null>(null);
-  const [pdfUrl, setPdfUrl] = useState('');
+  const [blobUrl, setBlobUrl] = useState('');
+  const [signedUrl, setSignedUrl] = useState('');
   const [expired, setExpired] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [pdfError, setPdfError] = useState(false);
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const blobUrlRef = useRef('');
+
+  // Fetch the PDF and turn it into a local blob URL
+  // This bypasses ALL iframe-blocking headers from Supabase Storage
+  const loadPdfAsBlob = useCallback(async (url: string) => {
+    setPdfError(false);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch PDF');
+      const blob = await res.blob();
+      // Revoke previous blob URL to free memory
+      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+      const newBlobUrl = URL.createObjectURL(blob);
+      blobUrlRef.current = newBlobUrl;
+      setBlobUrl(newBlobUrl);
+    } catch {
+      setPdfError(true);
+    }
+  }, []);
 
   const refreshUrl = useCallback(async () => {
     try {
       const res = await fetch('/api/get-pdf-url', { cache: 'no-store' });
-      if (res.status === 401) {
-        setExpired(true);
-        return;
-      }
+      if (res.status === 401) { setExpired(true); return; }
       if (res.ok) {
         const data = await res.json();
-        setPdfUrl(data.signed_url);
+        setSignedUrl(data.signed_url);
+        await loadPdfAsBlob(data.signed_url);
       }
     } catch {
-      // Silently fail — will expire naturally
+      // Will expire naturally
     }
-  }, []);
+  }, [loadPdfAsBlob]);
 
   useEffect(() => {
-    // Load from sessionStorage
     const stored = sessionStorage.getItem('result_student');
-
-    if (!stored) {
-      router.replace('/');
-      return;
-    }
+    if (!stored) { router.replace('/'); return; }
 
     try {
       const data = JSON.parse(stored);
       setStudent(data);
-      setPdfUrl(data.signed_url);
-      setLoading(false);
-
-      // Refresh signed URL every 90 seconds (before 120s expiry)
+      setSignedUrl(data.signed_url);
+      // Load PDF immediately as blob
+      loadPdfAsBlob(data.signed_url).then(() => setLoading(false));
+      // Refresh signed URL every 90s (before 120s expiry)
       refreshTimerRef.current = setInterval(refreshUrl, 90 * 1000);
     } catch {
       router.replace('/');
@@ -60,11 +74,29 @@ export default function ResultPage() {
 
     return () => {
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
     };
-  }, [router, refreshUrl]);
+  }, [router, refreshUrl, loadPdfAsBlob]);
 
-  const handlePrint = () => {
-    window.print();
+  // Print: open the signed URL in a new tab and trigger print there
+  // This prints only the clean PDF — no portal chrome, no student info panel
+  const handlePrint = async () => {
+    try {
+      // Use latest signed URL (refresh first to guarantee it's fresh)
+      const res = await fetch('/api/get-pdf-url', { cache: 'no-store' });
+      const freshUrl = res.ok ? (await res.json()).signed_url : signedUrl;
+      const win = window.open(freshUrl, '_blank');
+      if (win) {
+        win.onload = () => {
+          win.focus();
+          win.print();
+        };
+      }
+    } catch {
+      // Fallback: open current blob URL
+      const win = window.open(blobUrl, '_blank');
+      if (win) { win.onload = () => { win.focus(); win.print(); }; }
+    }
   };
 
   if (loading) {
@@ -75,7 +107,7 @@ export default function ResultPage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <p className="mt-3 text-gray-500 text-sm">Loading result...</p>
+          <p className="mt-3 text-gray-500 text-sm">Loading your result...</p>
         </div>
       </div>
     );
@@ -105,152 +137,114 @@ export default function ResultPage() {
 
   if (!student) return null;
 
-  const printDate = new Date().toLocaleDateString('en-NG', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
-
   return (
-    <>
-      {/* Print stylesheet */}
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          .print-header { display: block !important; }
-          nav.site-header { display: none !important; }
-          body { background: white; }
-          .print-watermark::after {
-            content: "OFFICIAL RESULT — NOT VALID WITHOUT SCHOOL STAMP AND SIGNATURE";
-            display: block;
-            text-align: center;
-            font-size: 10px;
-            color: #666;
-            padding-top: 12px;
-          }
-          @page { size: A4; margin: 15mm; }
-        }
-      `}</style>
-
-      <div className="min-h-screen flex flex-col bg-[#F5F5F5]">
-        {/* Navigation */}
-        <nav className="site-header bg-[#1a1a2e] text-white no-print">
-          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#FFD700] flex items-center justify-center font-bold text-[#1a1a2e] text-sm">
-                RC
-              </div>
-              <div>
-                <p className="font-semibold text-sm">Rehoboth College</p>
-                <p className="text-xs text-[#FFD700]">Official Result Portal</p>
-              </div>
+    <div className="min-h-screen flex flex-col bg-[#F5F5F5]">
+      {/* Navigation */}
+      <nav className="bg-[#1a1a2e] text-white">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#FFD700] flex items-center justify-center font-bold text-[#1a1a2e] text-sm flex-shrink-0">
+              RC
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handlePrint}
-                className="bg-[#FFD700] hover:bg-[#d4af00] text-[#1a1a2e] font-semibold px-4 py-2 rounded-md text-sm flex items-center gap-1"
-              >
-                🖨 Print Result
-              </button>
-              <button
-                onClick={() => { sessionStorage.removeItem('result_student'); router.push('/'); }}
-                className="text-gray-300 hover:text-white text-xs px-3 py-2 border border-gray-600 rounded-md"
-              >
-                Exit
-              </button>
+            <div>
+              <p className="font-semibold text-sm leading-tight">Rehoboth College</p>
+              <p className="text-xs text-[#FFD700] leading-tight">{student.full_name}</p>
             </div>
           </div>
-        </nav>
-
-        {/* Print header (only visible during print) */}
-        <div className="print-header hidden">
-          <div style={{ textAlign: 'center', borderBottom: '2px solid #4169E1', paddingBottom: '12px', marginBottom: '12px' }}>
-            <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '20px', color: '#1a1a2e' }}>REHOBOTH COLLEGE</h1>
-            <p style={{ fontSize: '11px', color: '#666' }}>OFFICIAL ACADEMIC RESULT</p>
-          </div>
-        </div>
-
-        <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
-          {/* Official header banner */}
-          <div className="bg-[#1a1a2e] text-white rounded-t-lg px-6 py-4 text-center">
-            <h1 className="font-garamond text-2xl font-bold text-[#FFD700] tracking-wide">
-              REHOBOTH COLLEGE
-            </h1>
-            <p className="text-xs uppercase tracking-widest text-gray-300 mt-1">
-              OFFICIAL RESULT PORTAL
-            </p>
-          </div>
-
-          {/* Student Info Panel */}
-          <div className="bg-white border border-gray-200 px-6 py-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {[
-                { label: 'STUDENT NAME', value: student.full_name },
-                { label: 'ADMISSION NUMBER', value: student.admission_no },
-                { label: 'CLASS', value: student.class },
-                { label: 'TERM', value: student.term },
-                { label: 'SESSION', value: student.session },
-                { label: 'DATE PRINTED', value: printDate },
-              ].map((item) => (
-                <div key={item.label} className="border-b border-gray-100 pb-2">
-                  <p className="text-xs text-gray-400 uppercase tracking-wider font-medium">{item.label}</p>
-                  <p className="font-garamond text-base font-semibold text-[#1a1a2e] mt-0.5">{item.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* PDF Viewer */}
-          <div
-            className="bg-white border border-gray-200 border-t-0 rounded-b-lg overflow-hidden pdf-viewer"
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex items-center justify-between no-print">
-              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">
-                Result Document
-              </span>
-              <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
-                Secure View
-              </span>
-            </div>
-
-            {pdfUrl ? (
-              <iframe
-                src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-                className="w-full border-none"
-                style={{ height: '80vh', minHeight: '600px' }}
-                title="Result PDF"
-                sandbox="allow-same-origin allow-scripts"
-              />
-            ) : (
-              <div className="flex items-center justify-center h-64 text-gray-400">
-                <p className="text-sm">Loading result document...</p>
-              </div>
-            )}
-          </div>
-
-          {/* Print watermark area */}
-          <div className="print-watermark hidden" />
-
-          {/* Actions */}
-          <div className="mt-4 flex items-center justify-between no-print">
-            <p className="text-xs text-gray-400">
-              Result session active. Auto-refreshes every 90 seconds.
-            </p>
+          <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="bg-[#4169E1] hover:bg-[#2c4fc9] text-white font-semibold px-5 py-2.5 rounded-md text-sm flex items-center gap-2"
+              className="bg-[#FFD700] hover:bg-[#d4af00] text-[#1a1a2e] font-semibold px-4 py-2 rounded-md text-sm flex items-center gap-1.5"
             >
-              🖨 Print Result
+              🖨 <span className="hidden sm:inline">Print Result</span><span className="sm:hidden">Print</span>
+            </button>
+            <button
+              onClick={() => { sessionStorage.removeItem('result_student'); router.push('/'); }}
+              className="text-gray-300 hover:text-white text-xs px-3 py-2 border border-gray-600 rounded-md"
+            >
+              Exit
             </button>
           </div>
-        </main>
+        </div>
+      </nav>
 
-        <footer className="bg-[#1a1a2e] text-gray-400 text-xs text-center py-3 no-print">
-          <p>© {new Date().getFullYear()} Rehoboth College. Official Result Portal.</p>
-        </footer>
+      {/* Result info strip */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+          <span className="text-gray-500">
+            <span className="font-medium text-[#1a1a2e]">{student.term}</span>
+          </span>
+          <span className="text-gray-300 hidden sm:inline">|</span>
+          <span className="text-gray-500">
+            <span className="font-medium text-[#1a1a2e]">{student.session}</span>
+          </span>
+          <span className="text-gray-300 hidden sm:inline">|</span>
+          <span className="text-gray-500">
+            Admission: <span className="font-mono font-medium text-[#4169E1]">{student.admission_no}</span>
+          </span>
+          <span className="ml-auto flex items-center gap-1.5 text-xs text-green-600 font-medium">
+            <span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+            Secure Session
+          </span>
+        </div>
       </div>
-    </>
+
+      {/* PDF Viewer — full height, blob URL bypasses all Chrome/mobile blocking */}
+      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-4">
+        <div
+          className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm"
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {pdfError ? (
+            // Fallback if blob fetch fails — offer direct open
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+              <span className="text-5xl mb-4">📄</span>
+              <h3 className="font-semibold text-[#1a1a2e] mb-2">Result Ready</h3>
+              <p className="text-gray-500 text-sm mb-5 max-w-xs">
+                Your result could not be displayed inline on this browser.
+                Click below to open it directly.
+              </p>
+              <a
+                href={signedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-[#4169E1] hover:bg-[#2c4fc9] text-white font-semibold px-6 py-3 rounded-md text-sm"
+              >
+                Open Result PDF
+              </a>
+              <p className="text-xs text-gray-400 mt-3">Opens in a new tab — use your browser's print button to print</p>
+            </div>
+          ) : blobUrl ? (
+            <iframe
+              src={blobUrl}
+              className="w-full border-none block"
+              style={{ height: '82vh', minHeight: '500px' }}
+              title="Your Result"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-64">
+              <svg className="animate-spin w-6 h-6 text-[#4169E1]" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-gray-400">Session auto-refreshes every 90 seconds.</p>
+          <button
+            onClick={handlePrint}
+            className="bg-[#4169E1] hover:bg-[#2c4fc9] text-white font-semibold px-5 py-2 rounded-md text-sm flex items-center gap-2"
+          >
+            🖨 Print Result
+          </button>
+        </div>
+      </main>
+
+      <footer className="bg-[#1a1a2e] text-gray-400 text-xs text-center py-3 mt-2">
+        <p>© {new Date().getFullYear()} Rehoboth College. Official Result Portal.</p>
+      </footer>
+    </div>
   );
 }
