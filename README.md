@@ -301,4 +301,3 @@ See `.env.local.example` for the full list with descriptions.
 
 Proprietary — Rehoboth College. All rights reserved.
 
-ghjj

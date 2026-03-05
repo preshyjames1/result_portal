@@ -11,12 +11,10 @@ const RATE_WINDOW_MS = 60 * 1000;
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const entry = rateLimitMap.get(ip);
-
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
     return true;
   }
-
   if (entry.count >= RATE_LIMIT) return false;
   entry.count++;
   return true;
@@ -93,17 +91,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 6. TRANSACTION: lock pin + increment + log
-  // Claim pin to student if not yet claimed
+  // 6. Lock pin + increment + log
   if (!pin.claimed_by_student_id) {
     const { error: claimErr } = await supabase
       .from('pins')
       .update({ claimed_by_student_id: student.id })
       .eq('id', pin.id)
-      .is('claimed_by_student_id', null); // optimistic lock
+      .is('claimed_by_student_id', null);
 
     if (claimErr) {
-      // Re-check in case another request claimed it simultaneously
       const { data: refreshedPin } = await supabase
         .from('pins')
         .select('claimed_by_student_id')
@@ -119,20 +115,23 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Increment usage count
   await supabase
     .from('pins')
     .update({ usage_count: pin.usage_count + 1 })
     .eq('id', pin.id);
 
-  // Log usage
   await supabase.from('pin_usage').insert({
     pin_id: pin.id,
     student_id: student.id,
     ip_address: ip,
   });
 
-  // 7. Find published result
+  // 7. Find result — with lazy publish fallback
+  //
+  // CRON WORKAROUND: Instead of relying on a cron job running every minute,
+  // we check right here if this result's scheduled publish_at time has passed.
+  // If yes, we publish it instantly at the moment the student checks.
+  // This means scheduled publishing works accurately even without frequent cron runs.
   const { data: result, error: resultErr } = await supabase
     .from('results')
     .select('*')
@@ -143,6 +142,15 @@ export async function POST(request: NextRequest) {
 
   if (resultErr || !result) {
     return NextResponse.json({ error: 'NO_RESULT_FOUND' } as ApiErrorResponse, { status: 404 });
+  }
+
+  // Lazy publish: if the scheduled time has passed, publish it now on-demand
+  if (!result.is_published && result.publish_at && new Date(result.publish_at) <= new Date()) {
+    await supabase
+      .from('results')
+      .update({ is_published: true, published_at: new Date().toISOString() })
+      .eq('id', result.id);
+    result.is_published = true;
   }
 
   if (!result.is_published) {
