@@ -42,7 +42,7 @@ export default function MasterPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/master/verify', {
+      const res = await fetch('/api/master', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

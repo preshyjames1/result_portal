@@ -21,7 +21,7 @@ function PaymentCallbackContent() {
     // Verify payment with Paystack
     const verify = async () => {
       try {
-        const res = await fetch(`/api/payment/verify?reference=${reference}`);
+        const res = await fetch(`/api/payment?reference=${reference}`);
         const data = await res.json();
 
         if (res.ok && data.status === 'success') {

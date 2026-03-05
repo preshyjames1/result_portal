@@ -98,10 +98,10 @@ function MasterBrowseContent() {
     setModalPdfUrl('');
 
     try {
-      const res = await fetch('/api/master/get-result', {
+      const res = await fetch('/api/master', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ admission_no: student.admission_no }),
+        body: JSON.stringify({ action: 'get-result', admission_no: student.admission_no }),
       });
 
       const data = await res.json();

@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
   // Get last_used for each master pin
   const enriched = await Promise.all(
-    (data ?? []).map(async (mp) => {
+    (data ?? []).map(async (mp: Record<string, unknown> & { id: string; pin_code: string; usage_count: number; usage_limit: number }) => {
       const { data: lastUsage } = await supabase
         .from('master_pin_usage')
         .select('used_at')

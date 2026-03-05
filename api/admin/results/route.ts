@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServer } from '@/lib/supabase-server';
 import { getAdminSession } from '@/lib/session';
+import JSZip from 'jszip';
 
 async function requireAdmin() {
   const session = await getAdminSession();
@@ -28,10 +29,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('results')
-    .select(
-      `*, students(admission_no, full_name, class)`,
-      { count: 'exact' }
-    )
+    .select(`*, students(admission_no, full_name, class)`, { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -45,7 +43,8 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ results: data, total: count });
 }
 
-// POST — upload single result
+// POST — single result upload OR bulk ZIP upload
+// Detected by: formData has 'zip_file' → bulk, 'pdf' → single
 export async function POST(request: NextRequest) {
   try {
     await requireAdmin();
@@ -54,11 +53,112 @@ export async function POST(request: NextRequest) {
   }
 
   const formData = await request.formData();
+  const zipFile = formData.get('zip_file') as File | null;
+
+  // ── BULK UPLOAD (ZIP) ─────────────────────────────────────────────
+  if (zipFile) {
+    const term = formData.get('term') as string;
+    const session = formData.get('session') as string;
+    const publish_mode = formData.get('publish_mode') as string;
+    const publish_at = formData.get('publish_at') as string | null;
+
+    if (!term || !session) {
+      return NextResponse.json({ error: 'Term and session are required' }, { status: 400 });
+    }
+
+    const maxMB = parseInt(process.env.MAX_BULK_ZIP_SIZE_MB ?? '50', 10);
+    if (zipFile.size > maxMB * 1024 * 1024) {
+      return NextResponse.json({ error: `ZIP file exceeds ${maxMB}MB limit` }, { status: 400 });
+    }
+
+    const supabase = createSupabaseServer();
+    const is_published = publish_mode === 'now';
+    const scheduledAt = publish_mode === 'scheduled' && publish_at ? publish_at : null;
+
+    let zip: JSZip;
+    try {
+      const buffer = Buffer.from(await zipFile.arrayBuffer());
+      zip = await JSZip.loadAsync(buffer);
+    } catch {
+      return NextResponse.json({ error: 'Invalid or corrupt ZIP file' }, { status: 400 });
+    }
+
+    const pdfFiles = Object.entries(zip.files).filter(
+      ([name, entry]) => !entry.dir && name.toLowerCase().endsWith('.pdf') && !name.startsWith('__MACOSX')
+    );
+
+    const total = pdfFiles.length;
+    let uploaded = 0;
+    let failed = 0;
+    const failures: { filename: string; reason: string }[] = [];
+
+    for (const [filename, entry] of pdfFiles) {
+      const baseName = filename.split('/').pop() ?? filename;
+      const admissionNo = baseName.replace(/\.pdf$/i, '').trim().toUpperCase();
+
+      const { data: student } = await supabase
+        .from('students')
+        .select('id, class')
+        .eq('admission_no', admissionNo)
+        .single();
+
+      if (!student) {
+        failed++;
+        failures.push({ filename: baseName, reason: `Student not found: ${admissionNo}` });
+        continue;
+      }
+
+      try {
+        const pdfBuffer = Buffer.from(await entry.async('arraybuffer'));
+        const path = `${session}/${student.class}/${student.id}.pdf`;
+
+        const { error: uploadErr } = await supabase.storage
+          .from('results')
+          .upload(path, pdfBuffer, { contentType: 'application/pdf', upsert: true });
+
+        if (uploadErr) {
+          failed++;
+          failures.push({ filename: baseName, reason: `Upload failed: ${uploadErr.message}` });
+          continue;
+        }
+
+        const { error: dbErr } = await supabase
+          .from('results')
+          .upsert(
+            {
+              student_id: student.id,
+              term,
+              session,
+              pdf_path: path,
+              is_published,
+              publish_at: scheduledAt,
+              published_at: is_published ? new Date().toISOString() : null,
+            },
+            { onConflict: 'student_id,term,session' }
+          );
+
+        if (dbErr) {
+          failed++;
+          failures.push({ filename: baseName, reason: `Database error: ${dbErr.message}` });
+          continue;
+        }
+
+        uploaded++;
+      } catch (err) {
+        failed++;
+        failures.push({ filename: baseName, reason: `Unexpected error: ${String(err)}` });
+      }
+    }
+
+    return NextResponse.json({ total, uploaded, failed, failures });
+  }
+
+  // ── SINGLE UPLOAD ─────────────────────────────────────────────────
   const file = formData.get('pdf') as File;
   const student_id = formData.get('student_id') as string;
   const term = formData.get('term') as string;
   const session = formData.get('session') as string;
-  const publish_mode = formData.get('publish_mode') as string; // 'now' | 'scheduled' | 'unpublished'
+  const publish_mode = formData.get('publish_mode') as string;
   const publish_at = formData.get('publish_at') as string | null;
 
   if (!file || !student_id || !term || !session) {
@@ -67,7 +167,6 @@ export async function POST(request: NextRequest) {
 
   const supabase = createSupabaseServer();
 
-  // Verify student
   const { data: student } = await supabase
     .from('students')
     .select('id, class')
@@ -76,22 +175,17 @@ export async function POST(request: NextRequest) {
 
   if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
 
-  // Upload PDF to storage
   const fileBuffer = Buffer.from(await file.arrayBuffer());
   const path = `${session}/${student.class}/${student_id}.pdf`;
 
   const { error: uploadErr } = await supabase.storage
     .from('results')
-    .upload(path, fileBuffer, {
-      contentType: 'application/pdf',
-      upsert: true,
-    });
+    .upload(path, fileBuffer, { contentType: 'application/pdf', upsert: true });
 
   if (uploadErr) {
     return NextResponse.json({ error: `Upload failed: ${uploadErr.message}` }, { status: 500 });
   }
 
-  // Determine publish state
   const is_published = publish_mode === 'now';
   const scheduledAt = publish_mode === 'scheduled' && publish_at ? publish_at : null;
 
@@ -117,7 +211,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ result: data }, { status: 201 });
 }
 
-// PATCH — update publish state
+// PATCH — update publish state (single or bulk)
 export async function PATCH(request: NextRequest) {
   try {
     await requireAdmin();
@@ -130,10 +224,8 @@ export async function PATCH(request: NextRequest) {
 
   const supabase = createSupabaseServer();
 
-  // Bulk action
   if (ids && Array.isArray(ids)) {
     let updates: Record<string, unknown> = {};
-
     if (action === 'publish') {
       updates = { is_published: true, published_at: new Date().toISOString(), publish_at: null };
     } else if (action === 'unpublish') {
@@ -141,18 +233,14 @@ export async function PATCH(request: NextRequest) {
     } else {
       return NextResponse.json({ error: 'Invalid bulk action' }, { status: 400 });
     }
-
     const { error } = await supabase.from('results').update(updates).in('id', ids);
-
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
     return NextResponse.json({ success: true, updated: ids.length });
   }
 
   if (!id) return NextResponse.json({ error: 'Result ID required' }, { status: 400 });
 
   let updates: Record<string, unknown> = {};
-
   if (action === 'publish') {
     updates = { is_published: true, published_at: new Date().toISOString(), publish_at: null };
   } else if (action === 'unpublish') {
@@ -171,11 +259,10 @@ export async function PATCH(request: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
   return NextResponse.json({ result: data });
 }
 
-// DELETE — remove result
+// DELETE — remove result and PDF from storage
 export async function DELETE(request: NextRequest) {
   try {
     await requireAdmin();
@@ -190,7 +277,6 @@ export async function DELETE(request: NextRequest) {
 
   const supabase = createSupabaseServer();
 
-  // Get pdf_path to delete from storage too
   const { data: result } = await supabase
     .from('results')
     .select('pdf_path')
@@ -202,7 +288,6 @@ export async function DELETE(request: NextRequest) {
   }
 
   const { error } = await supabase.from('results').delete().eq('id', id);
-
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ success: true });
