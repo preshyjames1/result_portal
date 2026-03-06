@@ -97,7 +97,7 @@ export default function HomePage() {
 
       {/* ── Hero — centered logo + school identity ── */}
       <header className="bg-gradient-to-b from-[#0f0f23] to-[#1a1a2e] text-white py-8 px-4">
-        <div className="max-w-5xl mx-auto flex flex-col items-center text-center gap-4">
+        <div className="max-w-5xl mx-auto flex flex-row items-center justify-center gap-6 text-center">
           <Image src="/logo.png" alt="Rehoboth College Crest" width={105} height={105} className="drop-shadow-xl" priority />
           <div>
             <h1 className="font-garamond text-3xl sm:text-4xl font-bold text-[#FFD700] leading-tight">
@@ -279,7 +279,7 @@ export default function HomePage() {
       <footer className="bg-[#1a1a2e] text-gray-400 text-xs text-center py-4 px-4 mt-4">
         <p className="font-garamond text-[#FFD700] text-sm mb-1">Rehoboth College</p>
         <p>Official Academic Result Portal</p>
-        <p className="mt-1">© {new Date().getFullYear()} Rehoboth College. Powered byJayP Technologies.</p>
+        <p className="mt-1">© {new Date().getFullYear()} Rehoboth College. Powered by JayP Technologies.</p>
       </footer>
     </div>
   );
