@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 interface StudentData {
   id: string;
@@ -70,7 +71,8 @@ export default function ResultPage() {
     };
   }, [router, refreshUrl, loadPdfAsBlob]);
 
-  // Print: open raw signed URL in new tab — prints ONLY the PDF, nothing else
+  // Print: opens the raw PDF in a new tab and triggers print
+  // Prints ONLY the uploaded PDF — no portal UI
   const handlePrint = async () => {
     try {
       const res = await fetch('/api/get-pdf-url', { cache: 'no-store' });
@@ -80,16 +82,6 @@ export default function ResultPage() {
     } catch {
       const win = window.open(blobUrl, '_blank');
       if (win) win.onload = () => { win.focus(); win.print(); };
-    }
-  };
-
-  const handleOpenPdf = async () => {
-    try {
-      const res = await fetch('/api/get-pdf-url', { cache: 'no-store' });
-      const freshUrl = res.ok ? (await res.json()).signed_url : signedUrl;
-      window.open(freshUrl, '_blank');
-    } catch {
-      window.open(blobUrl, '_blank');
     }
   };
 
@@ -130,7 +122,6 @@ export default function ResultPage() {
 
   return (
     <>
-      {/* Print styles: hides buttons/actions, keeps nav + result */}
       <style>{`
         @media print {
           .no-print { display: none !important; }
@@ -143,50 +134,47 @@ export default function ResultPage() {
 
       <div className="min-h-screen flex flex-col bg-[#F5F5F5]">
 
-        {/* ── Navigation bar — visible on screen AND on print ── */}
+        {/* Nav — visible on screen and print */}
         <nav className="bg-[#1a1a2e] text-white" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[#FFD700] flex items-center justify-center font-bold text-[#1a1a2e] text-sm flex-shrink-0">RC</div>
+              <Image src="/logo.png" alt="Rehoboth College" width={36} height={36}
+                className="rounded-full bg-white p-0.5 flex-shrink-0" />
               <div>
                 <p className="font-semibold text-sm leading-tight">Rehoboth College</p>
                 <p className="text-xs text-[#FFD700] leading-tight">Official Result Portal</p>
               </div>
             </div>
-            {/* Buttons hidden on print */}
+            {/* Screen only: Print + Exit */}
             <div className="flex items-center gap-2 no-print">
               <button onClick={handlePrint}
                 className="bg-[#FFD700] hover:bg-[#d4af00] text-[#1a1a2e] font-semibold px-4 py-2 rounded-md text-sm flex items-center gap-1.5">
-                🖨 <span className="hidden sm:inline">Print</span>
-              </button>
-              <button onClick={handleOpenPdf}
-                className="bg-white/10 hover:bg-white/20 text-white text-sm px-3 py-2 rounded-md border border-white/20">
-                Open PDF
+                🖨 <span className="hidden sm:inline">Print Result</span>
               </button>
               <button onClick={() => { sessionStorage.removeItem('result_student'); router.push('/'); }}
                 className="text-gray-300 hover:text-white text-xs px-3 py-2 border border-gray-600 rounded-md">
                 Exit
               </button>
             </div>
-            {/* Print-only label */}
+            {/* Print only: date */}
             <div className="print-only text-xs text-gray-300">
               Printed: {new Date().toLocaleDateString('en-NG', { day: '2-digit', month: 'long', year: 'numeric' })}
             </div>
           </div>
         </nav>
 
-        {/* ── Result info strip — visible on screen AND print ── */}
+        {/* Info strip — visible on screen and print */}
         <div className="bg-white border-b border-gray-200" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
           <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
             <span className="text-sm text-gray-500">Student: <span className="font-semibold text-[#1a1a2e]">{student.full_name}</span></span>
             <span className="text-gray-300 hidden sm:inline">|</span>
-            <span className="text-sm text-gray-500">Adm. No: <span className="font-mono font-semibold text-[#4169E1]">{student.admission_no}</span></span>
+            <span className="text-sm text-gray-500">Adm No: <span className="font-mono font-semibold text-[#4169E1]">{student.admission_no}</span></span>
             <span className="text-gray-300 hidden sm:inline">|</span>
             <span className="text-sm text-gray-500">Class: <span className="font-semibold text-[#1a1a2e]">{student.class}</span></span>
             <span className="text-gray-300 hidden sm:inline">|</span>
-            <span className="text-sm text-gray-500">{student.term} &mdash; <span className="font-semibold text-[#1a1a2e]">{student.session}</span></span>
+            <span className="text-sm text-gray-500">{student.term} — <span className="font-semibold text-[#1a1a2e]">{student.session}</span></span>
 
-            {/* PIN usage — right side */}
+            {/* PIN usage — screen */}
             <div className="ml-auto flex items-center gap-2 no-print">
               <div className="text-right">
                 <p className="text-xs text-gray-400 leading-none">PIN Usage</p>
@@ -196,54 +184,42 @@ export default function ResultPage() {
                 </p>
               </div>
               <div className="w-12 bg-gray-200 rounded-full h-1.5">
-                <div
-                  className={`h-1.5 rounded-full transition-all ${usagePct >= 80 ? 'bg-red-500' : usagePct >= 60 ? 'bg-yellow-500' : 'bg-green-500'}`}
-                  style={{ width: `${usagePct}%` }}
-                />
+                <div className={`h-1.5 rounded-full transition-all ${usagePct >= 80 ? 'bg-red-500' : usagePct >= 60 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                  style={{ width: `${usagePct}%` }} />
               </div>
             </div>
 
-            {/* PIN usage — print version (plain text, always visible during print) */}
+            {/* PIN usage — print */}
             <div className="print-only ml-auto text-xs text-gray-500">
               PIN used: {student.pin_usage_count}/{student.pin_usage_limit}
             </div>
 
-            {/* Secure badge — screen only */}
-            <span className="ml-2 flex items-center gap-1 text-xs text-green-600 font-medium no-print">
+            <span className="flex items-center gap-1 text-xs text-green-600 font-medium no-print">
               <span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span>Secure
             </span>
           </div>
         </div>
 
-        {/* ── PDF Viewer ── */}
+        {/* PDF Viewer */}
         <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-4">
-          <div
-            className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm"
-            onContextMenu={(e) => e.preventDefault()}
-          >
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm"
+            onContextMenu={(e) => e.preventDefault()}>
             {pdfError ? (
-              // Fallback: blob fetch failed (very rare — usually Safari private mode)
+              // Fallback for browsers where blob fetch fails (rare — Safari private mode)
               <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
                 <span className="text-5xl mb-4">📄</span>
                 <h3 className="font-semibold text-[#1a1a2e] mb-2">Result Ready</h3>
                 <p className="text-gray-500 text-sm mb-5 max-w-xs">
-                  Your result could not display inline on this browser. Open it directly below.
+                  Your result could not display inline on this browser. Use the Print button above to print directly.
                 </p>
-                <button
-                  onClick={handleOpenPdf}
-                  className="bg-[#4169E1] hover:bg-[#2c4fc9] text-white font-semibold px-6 py-3 rounded-md text-sm"
-                >
-                  Open Result PDF
+                <button onClick={handlePrint}
+                  className="bg-[#4169E1] hover:bg-[#2c4fc9] text-white font-semibold px-6 py-3 rounded-md text-sm">
+                  🖨 Print / Open Result
                 </button>
-                <p className="text-xs text-gray-400 mt-3">Use your browser's print button to print after opening</p>
               </div>
             ) : blobUrl ? (
-              <iframe
-                src={blobUrl}
-                className="w-full border-none block"
-                style={{ height: '82vh', minHeight: '500px' }}
-                title="Your Result"
-              />
+              <iframe src={blobUrl} className="w-full border-none block"
+                style={{ height: '82vh', minHeight: '500px' }} title="Your Result" />
             ) : (
               <div className="flex items-center justify-center h-64">
                 <svg className="animate-spin w-6 h-6 text-[#4169E1]" viewBox="0 0 24 24" fill="none">
@@ -255,17 +231,11 @@ export default function ResultPage() {
           </div>
 
           <div className="mt-3 flex items-center justify-between no-print">
-            <p className="text-xs text-gray-400">Session auto-refreshes. {usagesLeft} PIN use(s) remaining.</p>
-            <div className="flex items-center gap-2">
-              <button onClick={handleOpenPdf}
-                className="border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium px-4 py-2 rounded-md text-sm">
-                Open PDF
-              </button>
-              <button onClick={handlePrint}
-                className="bg-[#4169E1] hover:bg-[#2c4fc9] text-white font-semibold px-5 py-2 rounded-md text-sm flex items-center gap-2">
-                🖨 Print Result
-              </button>
-            </div>
+            <p className="text-xs text-gray-400">{usagesLeft} PIN use(s) remaining after this session.</p>
+            <button onClick={handlePrint}
+              className="bg-[#4169E1] hover:bg-[#2c4fc9] text-white font-semibold px-5 py-2 rounded-md text-sm flex items-center gap-2">
+              🖨 Print Result
+            </button>
           </div>
         </main>
 

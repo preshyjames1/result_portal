@@ -1,22 +1,48 @@
 import { randomBytes } from 'crypto';
 
-const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Omit O,0,I,1 for readability
+// Chars chosen to avoid visually confusing pairs: O/0, I/1
+const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /**
- * Generate a random PIN in format: XXXX-XXXX-XXXX
+ * Generate a 16-character alphanumeric PIN (no dashes).
+ * Stored in DB without dashes. Use formatPin() for display.
+ * e.g. "ABCD2345EFGH6789"
  */
 export function generatePin(): string {
-  const bytes = randomBytes(12);
+  const bytes = randomBytes(16);
   let pin = '';
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 16; i++) {
     pin += CHARS[bytes[i] % CHARS.length];
-    if (i === 3 || i === 7) pin += '-';
   }
   return pin;
 }
 
 /**
- * Generate a master access number in format: MASTER-XXXX
+ * Format a raw 16-char PIN for display: XXXX-XXXX-XXXX-XXXX
+ * Also handles legacy 12-char PINs: XXXX-XXXX-XXXX
+ */
+export function formatPin(raw: string): string {
+  // Strip any existing dashes first
+  const clean = raw.replace(/-/g, '');
+  if (clean.length === 16) {
+    return `${clean.slice(0, 4)}-${clean.slice(4, 8)}-${clean.slice(8, 12)}-${clean.slice(12, 16)}`;
+  }
+  if (clean.length === 12) {
+    return `${clean.slice(0, 4)}-${clean.slice(4, 8)}-${clean.slice(8, 12)}`;
+  }
+  return raw; // Unknown format — return as-is
+}
+
+/**
+ * Normalize PIN input from a user: strip all dashes, spaces, and lowercase.
+ * The DB stores PINs without dashes, so this is used before DB lookup.
+ */
+export function normalizePin(input: string): string {
+  return input.replace(/[-\s]/g, '').toUpperCase().trim();
+}
+
+/**
+ * Generate a master access number: MASTER-XXXX
  */
 export function generateMasterNumber(): string {
   const bytes = randomBytes(4);
@@ -28,15 +54,13 @@ export function generateMasterNumber(): string {
 }
 
 /**
- * Mask a PIN for display — shows only last 4 chars
- * e.g., "ABCD-EFGH-1234" → "XXXX-XXXX-1234"
+ * Mask a PIN for display — shows only last 4 chars.
+ * Works for both 16-char and legacy 12-char PINs.
+ * e.g., "ABCD2345EFGH6789" → "XXXX-XXXX-XXXX-6789"
  */
 export function maskPin(pin: string): string {
-  const parts = pin.split('-');
-  if (parts.length === 3) {
-    return `XXXX-XXXX-${parts[2]}`;
-  }
-  // Fallback: mask all but last 4 chars
-  const visible = pin.slice(-4);
-  return pin.slice(0, -4).replace(/[A-Z0-9]/g, 'X') + visible;
+  const clean = pin.replace(/-/g, '');
+  const visible = clean.slice(-4);
+  const masked = clean.slice(0, -4).replace(/./g, 'X');
+  return formatPin(masked + visible);
 }

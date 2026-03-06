@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServer } from '@/lib/supabase-server';
 import { setResultSession } from '@/lib/session';
+import { normalizePin } from '@/lib/pin-generator';
 import type { ApiErrorResponse, VerifyResponse } from '@/types';
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -42,6 +43,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'INVALID_CREDENTIALS' } as ApiErrorResponse, { status: 400 });
   }
 
+  // Normalize PIN: strip dashes, spaces, uppercase
+  // Works whether user enters "ABCD-EFGH-1234-5678" or "ABCDEFGH12345678"
+  const normalizedPin = normalizePin(pin_code);
+
   const supabase = createSupabaseServer();
 
   // 1. Find student
@@ -55,11 +60,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'INVALID_CREDENTIALS' } as ApiErrorResponse, { status: 401 });
   }
 
-  // 2. Find pin
+  // 2. Find PIN — search by normalized value (new PINs stored without dashes)
   const { data: pin, error: pinErr } = await supabase
     .from('pins')
     .select('*')
-    .eq('pin_code', pin_code.trim().toUpperCase())
+    .eq('pin_code', normalizedPin)
     .eq('term', term)
     .eq('session', session)
     .single();
@@ -78,7 +83,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'PIN_BELONGS_TO_ANOTHER_STUDENT' } as ApiErrorResponse, { status: 403 });
   }
 
-  // 3. Lock pin to student
+  // 3. Lock PIN to student on first use
   if (!pin.claimed_by_student_id) {
     const { error: claimErr } = await supabase
       .from('pins')
@@ -95,12 +100,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 4. Increment usage — new count is current + 1
+  // 4. Increment usage
   const newUsageCount = pin.usage_count + 1;
   await supabase.from('pins').update({ usage_count: newUsageCount }).eq('id', pin.id);
   await supabase.from('pin_usage').insert({ pin_id: pin.id, student_id: student.id, ip_address: ip });
 
-  // 5. Find result — with lazy publish fallback
+  // 5. Find result with lazy-publish
   const { data: result, error: resultErr } = await supabase
     .from('results')
     .select('*')
@@ -146,7 +151,6 @@ export async function POST(request: NextRequest) {
     },
     result: { term, session },
     signed_url: signedData.signedUrl,
-    // PIN usage info — shown on result page
     pin_usage_count: newUsageCount,
     pin_usage_limit: pin.usage_limit,
   };

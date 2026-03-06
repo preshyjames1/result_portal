@@ -87,6 +87,7 @@ export interface Admin {
   id: string;
   email: string;
   password_hash: string;
+  role: 'super' | 'school';
   created_at: string;
 }
 
@@ -111,6 +112,7 @@ export interface MasterSessionPayload {
 export interface AdminSessionPayload {
   admin_id: string;
   email: string;
+  role: 'super' | 'school'; // 'super' = full access, 'school' = no PIN management
   iat: number;
   exp: number;
 }
@@ -130,7 +132,8 @@ export type ApiError =
   | 'MASTER_PIN_SESSION_MISMATCH'
   | 'STUDENT_NOT_FOUND'
   | 'UNAUTHORIZED'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR'
+  | 'RATE_LIMITED';
 
 export interface ApiErrorResponse {
   error: ApiError;

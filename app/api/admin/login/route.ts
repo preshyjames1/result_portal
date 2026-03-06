@@ -36,9 +36,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
   }
 
-  await setAdminSession({ admin_id: admin.id, email: admin.email });
+  const role: 'super' | 'school' = admin.role ?? 'super';
 
-  return NextResponse.json({ success: true });
+  await setAdminSession({ admin_id: admin.id, email: admin.email, role });
+
+  // Return role so the login page can redirect to the correct dashboard
+  return NextResponse.json({ success: true, role });
 }
 
 export async function DELETE() {
