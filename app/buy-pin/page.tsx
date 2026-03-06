@@ -289,7 +289,7 @@ export default function BuyPinPage() {
         </main>
 
         <footer className="bg-[#1a1a2e] text-gray-400 text-xs text-center py-4">
-          <p>© {new Date().getFullYear()} Rehoboth College. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Rehoboth College. Powered by JayP Technologies.</p>
         </footer>
       </div>
     </>

@@ -95,12 +95,10 @@ export default function HomePage() {
         .ticker:hover { animation-play-state: paused; }
       `}</style>
 
-      {/* ── Hero — logo + school identity, no separate navbar ── */}
+      {/* ── Hero — centered logo + school identity ── */}
       <header className="bg-gradient-to-b from-[#0f0f23] to-[#1a1a2e] text-white py-8 px-4">
-        <div className="max-w-5xl mx-auto flex items-center gap-5 sm:gap-8">
-          <div className="flex-shrink-0">
-            <Image src="/logo.png" alt="Rehoboth College Crest" width={105} height={105} className="drop-shadow-xl" priority />
-          </div>
+        <div className="max-w-5xl mx-auto flex flex-col items-center text-center gap-4">
+          <Image src="/logo.png" alt="Rehoboth College Crest" width={105} height={105} className="drop-shadow-xl" priority />
           <div>
             <h1 className="font-garamond text-3xl sm:text-4xl font-bold text-[#FFD700] leading-tight">
               REHOBOTH COLLEGE
@@ -111,7 +109,7 @@ export default function HomePage() {
             <p className="text-gray-400 italic text-xs sm:text-sm mt-1">
               Motto: <span className="text-[#FFD700]">Godliness, Foundation for Excellence</span>
             </p>
-            <div className="mt-3 flex items-center gap-3 text-xs text-gray-400 flex-wrap">
+            <div className="mt-3 flex items-center justify-center gap-3 text-xs text-gray-400 flex-wrap">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-green-400 inline-block"></span>Secure Portal
               </span>
@@ -124,8 +122,8 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* ── Announcement Ticker ── */}
-      <div className="bg-red-600 text-white overflow-hidden py-2 select-none">
+      {/* ── Announcement Ticker — blends with hero ── */}
+      <div className="bg-[#0f0f23] text-[#FFD700] overflow-hidden py-2 select-none border-t border-white/10">
         <div className="flex">
           <span className="ticker whitespace-nowrap text-sm font-medium px-4 inline-block">
             {tickerText}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{tickerText}
@@ -281,7 +279,7 @@ export default function HomePage() {
       <footer className="bg-[#1a1a2e] text-gray-400 text-xs text-center py-4 px-4 mt-4">
         <p className="font-garamond text-[#FFD700] text-sm mb-1">Rehoboth College</p>
         <p>Official Academic Result Portal</p>
-        <p className="mt-1">© {new Date().getFullYear()} Rehoboth College. Powered by JayP Technologies.</p>
+        <p className="mt-1">© {new Date().getFullYear()} Rehoboth College. Powered byJayP Technologies.</p>
       </footer>
     </div>
   );
