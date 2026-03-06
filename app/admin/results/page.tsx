@@ -71,6 +71,12 @@ export default function AdminResultsPage() {
   const [reuploadMsg, setReuploadMsg] = useState('');
   const reuploadInputRef = useRef<HTMLInputElement>(null);
 
+  // View PDF modal
+  const [viewTarget, setViewTarget] = useState<Result | null>(null);
+  const [viewUrl, setViewUrl] = useState('');
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewError, setViewError] = useState('');
+
   const fetchResults = useCallback(async () => {
     setLoading(true);
     try {
@@ -170,15 +176,10 @@ export default function AdminResultsPage() {
     setReuploadLoading(true); setReuploadMsg('');
     const fd = new FormData();
     fd.append('pdf', reuploadFile);
-    fd.append('student_id', reuploadTarget.students ? (reuploadTarget as unknown as { student_id: string }).student_id : '');
-    // We need student_id — fetch it from the result record
-    // Since we store student relation, we'll pass result_id and handle server-side
-    // Actually, let's pass what we know and use the existing POST (upsert) logic
     fd.append('result_id', reuploadTarget.id);
     fd.append('term', reuploadTarget.term);
     fd.append('session', reuploadTarget.session);
     fd.append('publish_mode', reuploadTarget.is_published ? 'now' : 'unpublished');
-
     try {
       const res = await fetch('/api/admin/results/reupload', { method: 'POST', body: fd });
       if (res.ok) {
@@ -190,6 +191,36 @@ export default function AdminResultsPage() {
       }
     } catch { setReuploadMsg('❌ Network error'); }
     finally { setReuploadLoading(false); }
+  };
+
+  // Open View PDF modal — fetches signed URL then loads as blob
+  const handleViewPdf = async (result: Result) => {
+    setViewTarget(result);
+    setViewUrl('');
+    setViewError('');
+    setViewLoading(true);
+    try {
+      const res = await fetch(`/api/admin/results/view-pdf?result_id=${result.id}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to get PDF URL');
+      const data = await res.json();
+      // Fetch as blob to avoid iframe X-Frame-Options issues
+      const pdfRes = await fetch(data.signed_url);
+      if (!pdfRes.ok) throw new Error('Failed to fetch PDF');
+      const blob = await pdfRes.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      setViewUrl(blobUrl);
+    } catch {
+      setViewError('Could not load PDF. Try again.');
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const closeViewModal = () => {
+    if (viewUrl) URL.revokeObjectURL(viewUrl);
+    setViewTarget(null);
+    setViewUrl('');
+    setViewError('');
   };
 
   const PublishFields = ({ form, setForm }: { form: typeof singleForm; setForm: (f: typeof singleForm) => void }) => (
@@ -218,7 +249,7 @@ export default function AdminResultsPage() {
     <div>
       <div className="mb-6">
         <h1 className="font-garamond text-2xl font-bold text-[#1a1a2e]">Results Management</h1>
-        <p className="text-gray-500 text-sm mt-1">Upload, replace, and manage student result PDFs</p>
+        <p className="text-gray-500 text-sm mt-1">Upload, view, replace, and manage student result PDFs</p>
       </div>
 
       {/* Tabs */}
@@ -231,7 +262,7 @@ export default function AdminResultsPage() {
         ))}
       </div>
 
-      {/* ── Single Upload ── */}
+      {/* Single Upload */}
       {tab === 'single' && (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden max-w-lg">
           <div className="bg-[#4169E1] px-5 py-4">
@@ -244,7 +275,6 @@ export default function AdminResultsPage() {
                 {singleMsg}
               </div>
             )}
-            {/* Student search */}
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1">Student *</label>
               {selectedStudent ? (
@@ -310,7 +340,7 @@ export default function AdminResultsPage() {
         </div>
       )}
 
-      {/* ── Bulk Upload ── */}
+      {/* Bulk Upload */}
       {tab === 'bulk' && (
         <div className="max-w-lg space-y-4">
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -322,11 +352,9 @@ export default function AdminResultsPage() {
               <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-sm text-blue-800">
                 <p className="font-semibold mb-1">ZIP structure:</p>
                 <code className="text-xs block bg-white px-2 py-1 rounded border border-blue-100">
-                  results.zip<br />
-                  ├── RC-2024-001.pdf<br />
-                  └── RC-2024-002.pdf
+                  results.zip<br />├── RC-2024-001.pdf<br />└── RC-2024-002.pdf
                 </code>
-                <p className="text-xs text-blue-600 mt-1">Each PDF named with the student's admission number</p>
+                <p className="text-xs text-blue-600 mt-1">Each PDF named with the student&apos;s admission number</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -371,12 +399,8 @@ export default function AdminResultsPage() {
             <div className="bg-white rounded-lg border border-gray-200 p-5">
               <h3 className="font-semibold text-[#1a1a2e] mb-3">Upload Report</h3>
               <div className="border border-gray-200 rounded-md overflow-hidden text-sm">
-                <div className="px-4 py-2.5 flex justify-between border-b border-gray-100">
-                  <span className="text-gray-600">Total files</span><span className="font-bold">{bulkReport.total}</span>
-                </div>
-                <div className="px-4 py-2.5 flex justify-between border-b border-gray-100 bg-green-50">
-                  <span className="text-green-700">✅ Uploaded</span><span className="font-bold text-green-700">{bulkReport.uploaded}</span>
-                </div>
+                <div className="px-4 py-2.5 flex justify-between border-b border-gray-100"><span className="text-gray-600">Total files</span><span className="font-bold">{bulkReport.total}</span></div>
+                <div className="px-4 py-2.5 flex justify-between border-b border-gray-100 bg-green-50"><span className="text-green-700">✅ Uploaded</span><span className="font-bold text-green-700">{bulkReport.uploaded}</span></div>
                 <div className={`px-4 py-2.5 flex justify-between ${bulkReport.failed > 0 ? 'bg-red-50' : ''}`}>
                   <span className={bulkReport.failed > 0 ? 'text-red-600' : 'text-gray-400'}>❌ Failed</span>
                   <span className={`font-bold ${bulkReport.failed > 0 ? 'text-red-600' : 'text-gray-400'}`}>{bulkReport.failed}</span>
@@ -394,16 +418,14 @@ export default function AdminResultsPage() {
         </div>
       )}
 
-      {/* ── Results List ── */}
+      {/* Results List */}
       {tab === 'list' && (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           {selectedIds.size > 0 && (
             <div className="bg-blue-50 border-b border-blue-200 px-5 py-3 flex items-center gap-3 flex-wrap">
               <span className="text-sm text-blue-700 font-medium">{selectedIds.size} selected</span>
-              <button onClick={() => handleBulkAction('publish')}
-                className="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-md">Publish All</button>
-              <button onClick={() => handleBulkAction('unpublish')}
-                className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-medium px-3 py-1.5 rounded-md">Unpublish All</button>
+              <button onClick={() => handleBulkAction('publish')} className="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-md">Publish All</button>
+              <button onClick={() => handleBulkAction('unpublish')} className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-medium px-3 py-1.5 rounded-md">Unpublish All</button>
               <button onClick={() => setSelectedIds(new Set())} className="text-gray-500 text-xs hover:text-gray-700 ml-auto">Clear</button>
             </div>
           )}
@@ -430,7 +452,7 @@ export default function AdminResultsPage() {
                         checked={selectedIds.size === results.length && results.length > 0}
                         onChange={(e) => setSelectedIds(e.target.checked ? new Set(results.map((r) => r.id)) : new Set())} />
                     </th>
-                    {['Student', 'Admission No', 'Class', 'Term', 'Session', 'Status', 'Actions'].map((h) => (
+                    {['Student', 'Adm. No', 'Class', 'Term', 'Session', 'Status', 'Actions'].map((h) => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -439,8 +461,7 @@ export default function AdminResultsPage() {
                   {results.map((r) => (
                     <tr key={r.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
-                        <input type="checkbox" className="rounded"
-                          checked={selectedIds.has(r.id)}
+                        <input type="checkbox" className="rounded" checked={selectedIds.has(r.id)}
                           onChange={() => {
                             const n = new Set(selectedIds);
                             n.has(r.id) ? n.delete(r.id) : n.add(r.id);
@@ -455,6 +476,8 @@ export default function AdminResultsPage() {
                       <td className="px-4 py-3"><StatusBadge result={r} /></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 text-xs font-medium flex-wrap">
+                          {/* View PDF */}
+                          <button onClick={() => handleViewPdf(r)} className="text-[#4169E1] hover:underline">View PDF</button>
                           {!r.is_published && (
                             <button onClick={() => handleAction(r.id, 'publish')} className="text-green-600 hover:underline">Publish</button>
                           )}
@@ -467,20 +490,10 @@ export default function AdminResultsPage() {
                               if (dt) handleAction(r.id, 'schedule', dt);
                             }} className="text-blue-500 hover:underline">Schedule</button>
                           )}
-                          {/* Reupload button */}
-                          <button
-                            onClick={() => { setReuploadTarget(r); setReuploadFile(null); setReuploadMsg(''); }}
-                            className="text-purple-600 hover:underline"
-                          >
-                            Replace PDF
-                          </button>
-                          {/* Delete button */}
-                          <button
-                            onClick={() => handleDelete(r.id, r.students?.full_name ?? 'this student')}
-                            className="text-red-500 hover:underline"
-                          >
-                            Delete
-                          </button>
+                          <button onClick={() => { setReuploadTarget(r); setReuploadFile(null); setReuploadMsg(''); }}
+                            className="text-purple-600 hover:underline">Replace PDF</button>
+                          <button onClick={() => handleDelete(r.id, r.students?.full_name ?? 'this student')}
+                            className="text-red-500 hover:underline">Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -492,6 +505,43 @@ export default function AdminResultsPage() {
         </div>
       )}
 
+      {/* ── View PDF Modal ── */}
+      {viewTarget && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/80">
+          {/* Modal header */}
+          <div className="bg-[#1a1a2e] text-white px-5 py-3 flex items-center justify-between flex-shrink-0">
+            <div>
+              <p className="font-semibold text-sm">{viewTarget.students?.full_name ?? 'Result'}</p>
+              <p className="text-gray-400 text-xs mt-0.5">
+                {viewTarget.students?.admission_no} · {viewTarget.students?.class} · {viewTarget.term} {viewTarget.session}
+              </p>
+            </div>
+            <button onClick={closeViewModal}
+              className="text-gray-400 hover:text-white text-xl font-light leading-none px-2">✕</button>
+          </div>
+          {/* PDF viewer */}
+          <div className="flex-1 bg-gray-800 flex items-center justify-center overflow-hidden">
+            {viewLoading ? (
+              <div className="text-center text-white">
+                <svg className="animate-spin w-8 h-8 mx-auto mb-3" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <p className="text-sm text-gray-300">Loading PDF...</p>
+              </div>
+            ) : viewError ? (
+              <div className="text-center text-white">
+                <p className="text-4xl mb-3">⚠️</p>
+                <p className="text-sm text-gray-300">{viewError}</p>
+                <button onClick={() => handleViewPdf(viewTarget)} className="mt-4 bg-[#4169E1] text-white px-4 py-2 rounded-md text-sm">Try Again</button>
+              </div>
+            ) : viewUrl ? (
+              <iframe src={viewUrl} className="w-full h-full border-none" title="Result PDF" />
+            ) : null}
+          </div>
+        </div>
+      )}
+
       {/* ── Reupload Modal ── */}
       {reuploadTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
@@ -499,9 +549,7 @@ export default function AdminResultsPage() {
             <div className="bg-purple-600 px-5 py-4 flex items-center justify-between">
               <div>
                 <h2 className="font-semibold text-white text-sm">Replace Result PDF</h2>
-                <p className="text-purple-200 text-xs mt-0.5">
-                  {reuploadTarget.students?.full_name} — {reuploadTarget.term} {reuploadTarget.session}
-                </p>
+                <p className="text-purple-200 text-xs mt-0.5">{reuploadTarget.students?.full_name} — {reuploadTarget.term} {reuploadTarget.session}</p>
               </div>
               <button onClick={() => setReuploadTarget(null)} className="text-purple-200 hover:text-white">✕</button>
             </div>
@@ -512,25 +560,18 @@ export default function AdminResultsPage() {
                 </div>
               )}
               <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-xs text-amber-800">
-                ⚠️ This will permanently replace the existing PDF. The publish state will be preserved.
+                ⚠️ This will permanently replace the existing PDF. Publish state will be preserved.
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">New PDF File *</label>
-                <input
-                  ref={reuploadInputRef}
-                  type="file"
-                  accept="application/pdf"
+                <input ref={reuploadInputRef} type="file" accept="application/pdf"
                   onChange={(e) => setReuploadFile(e.target.files?.[0] ?? null)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm file:mr-3 file:py-1 file:px-3 file:border-0 file:rounded file:bg-purple-50 file:text-purple-700 file:text-xs"
-                  required
-                />
+                  required />
               </div>
               <div className="flex gap-3">
-                <button
-                  type="submit"
-                  disabled={reuploadLoading || !reuploadFile}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white font-semibold py-2.5 rounded-md text-sm"
-                >
+                <button type="submit" disabled={reuploadLoading || !reuploadFile}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white font-semibold py-2.5 rounded-md text-sm">
                   {reuploadLoading ? 'Replacing...' : 'Replace PDF'}
                 </button>
                 <button type="button" onClick={() => setReuploadTarget(null)}

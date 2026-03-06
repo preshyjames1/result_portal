@@ -5,14 +5,11 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-// School admin sees everything EXCEPT PIN management
+// School admin: ONLY students and results management
 const NAV_ITEMS = [
   { href: '/school-admin/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/school-admin/students', label: 'Students', icon: '👥' },
-  { href: '/school-admin/results', label: 'Upload Results', icon: '📄' },
-  { href: '/school-admin/master-pins', label: 'Master PINs', icon: '🛡' },
-  { href: '/school-admin/publish', label: 'Publish Schedule', icon: '📅' },
-  { href: '/school-admin/transactions', label: 'Transactions', icon: '💳' },
+  { href: '/school-admin/results', label: 'Results', icon: '📄' },
 ];
 
 export default function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
@@ -36,7 +33,6 @@ export default function SchoolAdminLayout({ children }: { children: React.ReactN
       )}
 
       <aside className={`fixed md:static inset-y-0 left-0 z-30 w-60 bg-[#1a2e1a] text-white flex flex-col transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        {/* Logo */}
         <div className="px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-3">
             <Image src="/logo.png" alt="Rehoboth College" width={38} height={38}
@@ -61,7 +57,11 @@ export default function SchoolAdminLayout({ children }: { children: React.ReactN
           })}
         </nav>
 
-        <div className="px-3 py-4 border-t border-white/10">
+        <div className="px-3 py-3 border-t border-white/10">
+          <div className="px-3 py-2 mb-1">
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Access Level</p>
+            <p className="text-xs text-gray-400 mt-1">Students &amp; Results only. PIN management is restricted to the super admin.</p>
+          </div>
           <button onClick={handleLogout} disabled={loggingOut}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-gray-400 hover:text-white hover:bg-white/10 text-left">
             <span>🚪</span>

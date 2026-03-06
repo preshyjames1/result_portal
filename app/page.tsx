@@ -13,6 +13,16 @@ const SESSIONS = Array.from({ length: 5 }, (_, i) => {
 });
 const CLASSES = ['JSS 1', 'JSS 2', 'JSS 3', 'SS 1', 'SS 2', 'SS 3'];
 
+// ── Edit announcements here ──────────────────────────────────────────────
+const ANNOUNCEMENTS = [
+  '📢 First Term 2025/2026 results are now available — check your result using your PIN.',
+  '📌 PINs can be purchased online — click "Buy a PIN" below to get yours instantly.',
+  '⚠️ Ensure you use the correct Term and Session when checking your result.',
+  '📞 For enquiries, contact the school office during working hours.',
+  '🎓 Congratulations to all students on the completion of the First Term examinations.',
+];
+// ────────────────────────────────────────────────────────────────────────
+
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'Invalid admission number or PIN. Please check and try again.',
   PIN_INACTIVE: 'This PIN has been deactivated. Please contact the school.',
@@ -72,202 +82,206 @@ export default function HomePage() {
     }
   };
 
+  const tickerText = ANNOUNCEMENTS.join('      ✦      ');
+
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Navigation — no Buy PIN button */}
-      <nav className="bg-[#1a1a2e] text-white shadow-lg">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Image src="/logo.png" alt="Rehoboth College" width={40} height={40}
-            className="rounded-full bg-white p-0.5 flex-shrink-0" />
+    <div className="min-h-screen flex flex-col bg-[#F5F5F5]">
+      <style>{`
+        @keyframes marquee {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .ticker { animation: marquee 55s linear infinite; }
+        .ticker:hover { animation-play-state: paused; }
+      `}</style>
+
+      {/* ── Hero — logo + school identity, no separate navbar ── */}
+      <header className="bg-gradient-to-b from-[#0f0f23] to-[#1a1a2e] text-white py-8 px-4">
+        <div className="max-w-5xl mx-auto flex items-center gap-5 sm:gap-8">
+          <div className="flex-shrink-0">
+            <Image src="/logo.png" alt="Rehoboth College Crest" width={105} height={105} className="drop-shadow-xl" priority />
+          </div>
           <div>
-            <p className="font-semibold text-sm leading-tight">Rehoboth College</p>
-            <p className="text-xs text-[#FFD700] leading-tight">Official Result Portal</p>
+            <h1 className="font-garamond text-3xl sm:text-4xl font-bold text-[#FFD700] leading-tight">
+              REHOBOTH COLLEGE
+            </h1>
+            <p className="text-gray-300 uppercase tracking-widest text-xs sm:text-sm mt-1">
+              Official Student Result Checking Portal
+            </p>
+            <p className="text-gray-400 italic text-xs sm:text-sm mt-1">
+              Motto: <span className="text-[#FFD700]">Godliness, Foundation for Excellence</span>
+            </p>
+            <div className="mt-3 flex items-center gap-3 text-xs text-gray-400 flex-wrap">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-400 inline-block"></span>Secure Portal
+              </span>
+              <span className="text-gray-600">|</span>
+              <span>PIN-Protected Access</span>
+              <span className="text-gray-600">|</span>
+              <span>Official Results Only</span>
+            </div>
           </div>
         </div>
-      </nav>
+      </header>
 
-      {/* Hero */}
-      <div className="bg-gradient-to-r from-[#1a1a2e] via-[#252545] to-[#1a1a2e] text-white py-6 px-4">
-        <div className="max-w-6xl mx-auto text-center">
-          <h1 className="font-garamond text-3xl md:text-4xl font-bold text-[#FFD700] mb-1">REHOBOTH COLLEGE</h1>
-          <p className="text-sm text-gray-300 uppercase tracking-widest">Official Student Result Checking Portal</p>
-          <p className="text-xs text-gray-500 italic mt-1">Motto: Godliness, Foundation for Excellence</p>
+      {/* ── Announcement Ticker ── */}
+      <div className="bg-red-600 text-white overflow-hidden py-2 select-none">
+        <div className="flex">
+          <span className="ticker whitespace-nowrap text-sm font-medium px-4 inline-block">
+            {tickerText}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{tickerText}
+          </span>
         </div>
       </div>
 
-      {/* Main content — 2-column on desktop */}
-      <main className="flex-1 flex items-start justify-center px-4 py-8">
-        <div className="w-full max-w-5xl">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+      {/* ── Main 2-col layout ── */}
+      <main className="flex-1 py-8 px-4">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
 
-            {/* ── LEFT: Instructions panel ── */}
-            <div className="lg:col-span-2 space-y-4">
-              {/* How to check */}
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                <div className="bg-[#4169E1] px-4 py-3">
-                  <h3 className="font-semibold text-white text-sm flex items-center gap-2">
-                    📋 How to Check Your Result
-                  </h3>
-                </div>
-                <ol className="px-4 py-4 space-y-3">
-                  {[
-                    { n: '1', title: 'Get your PIN', desc: 'Purchase a result-checking PIN from the school office or online via the link below.' },
-                    { n: '2', title: 'Enter your details', desc: 'Fill in your Admission Number, Class, Term, and Academic Session on the form.' },
-                    { n: '3', title: 'Enter your PIN', desc: 'Type your 16-character PIN. You can enter it with or without the dashes.' },
-                    { n: '4', title: 'View your result', desc: 'Click "Check Result" to load your official result sheet.' },
-                    { n: '5', title: 'Print if needed', desc: 'Use the Print button to print a clean copy of your result.' },
-                  ].map((step) => (
-                    <li key={step.n} className="flex gap-3">
-                      <span className="w-6 h-6 rounded-full bg-[#4169E1] text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-                        {step.n}
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold text-[#1a1a2e]">{step.title}</p>
-                        <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{step.desc}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
+          {/* LEFT: Instructions */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <div className="bg-[#4169E1] px-4 py-3">
+                <h3 className="font-semibold text-white text-sm">📋 How to Check Your Result</h3>
               </div>
+              <ol className="px-4 py-4 space-y-3">
+                {[
+                  { n: '1', title: 'Get your PIN', desc: 'Purchase from the school office or buy online via the link below.' },
+                  { n: '2', title: 'Enter your details', desc: 'Fill in your Admission Number, Class, Term, and Session.' },
+                  { n: '3', title: 'Enter your PIN', desc: 'Type your 16-character PIN — dashes are optional.' },
+                  { n: '4', title: 'View your result', desc: 'Click "Check Result" to load your official result sheet.' },
+                  { n: '5', title: 'Print if needed', desc: 'Use the Print button for a clean A4 printout.' },
+                ].map((step) => (
+                  <li key={step.n} className="flex gap-3">
+                    <span className="w-6 h-6 rounded-full bg-[#4169E1] text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                      {step.n}
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-[#1a1a2e]">{step.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{step.desc}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
 
-              {/* PIN usage info */}
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                <div className="bg-[#FFD700] px-4 py-3">
-                  <h3 className="font-semibold text-[#1a1a2e] text-sm flex items-center gap-2">
-                    🔑 About Your PIN
-                  </h3>
-                </div>
-                <div className="px-4 py-4 space-y-3 text-sm text-gray-600">
-                  <p className="flex gap-2"><span className="text-[#4169E1]">▸</span> Each PIN can be used <strong>5 times</strong> to view a result.</p>
-                  <p className="flex gap-2"><span className="text-[#4169E1]">▸</span> A PIN is <strong>locked to the first student</strong> who uses it. Keep your PIN private.</p>
-                  <p className="flex gap-2"><span className="text-[#4169E1]">▸</span> PINs are <strong>term-specific</strong> — a First Term PIN cannot be used for Second Term results.</p>
-                  <p className="flex gap-2"><span className="text-[#4169E1]">▸</span> If your PIN is exhausted, you can purchase a new one.</p>
-                </div>
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <div className="bg-[#FFD700] px-4 py-3">
+                <h3 className="font-semibold text-[#1a1a2e] text-sm">🔑 About Your PIN</h3>
               </div>
-
-              {/* Buy PIN */}
-              <div className="bg-[#1a1a2e] rounded-lg px-4 py-4 text-center">
-                <p className="text-white text-sm font-semibold mb-1">Don&apos;t have a PIN yet?</p>
-                <p className="text-gray-400 text-xs mb-3">Purchase online and receive it instantly by email</p>
-                <Link href="/buy-pin"
-                  className="inline-block bg-[#FFD700] hover:bg-[#d4af00] text-[#1a1a2e] font-bold px-5 py-2.5 rounded-md text-sm">
-                  Buy a PIN — ₦500
-                </Link>
+              <div className="px-4 py-4 space-y-2.5 text-sm text-gray-600">
+                <p className="flex gap-2"><span className="text-[#4169E1] font-bold">▸</span>Each PIN allows <strong>5 views</strong> of a result.</p>
+                <p className="flex gap-2"><span className="text-[#4169E1] font-bold">▸</span>A PIN is <strong>locked to the first student</strong> who uses it — keep it private.</p>
+                <p className="flex gap-2"><span className="text-[#4169E1] font-bold">▸</span>PINs are <strong>term-specific</strong> — a First Term PIN won&apos;t work for Second Term.</p>
+                <p className="flex gap-2"><span className="text-[#4169E1] font-bold">▸</span>If your PIN is exhausted, purchase a new one below.</p>
               </div>
             </div>
 
-            {/* ── RIGHT: Result checking form ── */}
-            <div className="lg:col-span-3">
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                <div className="bg-[#4169E1] px-6 py-4">
-                  <h2 className="font-garamond text-xl text-white font-semibold">Check Your Result</h2>
-                  <p className="text-blue-100 text-xs mt-1">Fill in all fields accurately to access your result</p>
+            <div className="bg-[#1a1a2e] rounded-lg px-4 py-4 text-center">
+              <p className="text-white text-sm font-semibold mb-1">Don&apos;t have a PIN yet?</p>
+              <p className="text-gray-400 text-xs mb-3">Purchase online and receive it instantly by email</p>
+              <Link href="/buy-pin" className="inline-block bg-[#FFD700] hover:bg-[#d4af00] text-[#1a1a2e] font-bold px-5 py-2.5 rounded-md text-sm">
+                Buy a PIN — ₦500
+              </Link>
+            </div>
+          </div>
+
+          {/* RIGHT: Form */}
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <div className="bg-[#4169E1] px-6 py-4">
+                <h2 className="font-garamond text-xl text-white font-semibold">Check Your Result</h2>
+                <p className="text-blue-100 text-xs mt-1">Fill in all fields accurately to access your result</p>
+              </div>
+              <form onSubmit={handleSubmit} className="px-6 py-6 space-y-4">
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-md px-4 py-3 flex items-start gap-2">
+                    <span className="text-red-500 mt-0.5">⚠</span>
+                    <p className="text-red-700 text-sm">{error}</p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Admission Number <span className="text-red-500">*</span></label>
+                  <input type="text" name="admission_no" value={form.admission_no} onChange={handleChange}
+                    placeholder="e.g. RC-2024-001"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-[#4169E1]"
+                    required autoComplete="off" />
                 </div>
 
-                <form onSubmit={handleSubmit} className="px-6 py-6 space-y-4">
-                  {error && (
-                    <div className="bg-red-50 border border-red-200 rounded-md px-4 py-3 flex items-start gap-2">
-                      <span className="text-red-500 mt-0.5">⚠</span>
-                      <p className="text-red-700 text-sm">{error}</p>
-                    </div>
-                  )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Class <span className="text-red-500">*</span></label>
+                  <select name="class" value={form.class} onChange={handleChange}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#4169E1]"
+                    required>
+                    <option value="">— Select Class —</option>
+                    {CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
 
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Admission Number <span className="text-red-500">*</span>
-                    </label>
-                    <input type="text" name="admission_no" value={form.admission_no} onChange={handleChange}
-                      placeholder="e.g. RC-2024-001"
-                      className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-[#4169E1]"
-                      required autoComplete="off" />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Class <span className="text-red-500">*</span>
-                    </label>
-                    <select name="class" value={form.class} onChange={handleChange}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Term <span className="text-red-500">*</span></label>
+                    <select name="term" value={form.term} onChange={handleChange}
                       className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#4169E1]"
                       required>
-                      <option value="">— Select Class —</option>
-                      {CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
+                      <option value="">— Term —</option>
+                      {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Term <span className="text-red-500">*</span>
-                      </label>
-                      <select name="term" value={form.term} onChange={handleChange}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#4169E1]"
-                        required>
-                        <option value="">— Term —</option>
-                        {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Session <span className="text-red-500">*</span>
-                      </label>
-                      <select name="session" value={form.session} onChange={handleChange}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#4169E1]"
-                        required>
-                        <option value="">— Session —</option>
-                        {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                  </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      PIN <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <input type={showPin ? 'text' : 'password'} name="pin_code" value={form.pin_code}
-                        onChange={handleChange}
-                        placeholder="Enter 16-character PIN (dashes optional)"
-                        className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm font-mono uppercase pr-16 focus:outline-none focus:ring-2 focus:ring-[#4169E1]"
-                        required autoComplete="off" />
-                      <button type="button" onClick={() => setShowPin(!showPin)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs font-medium">
-                        {showPin ? 'HIDE' : 'SHOW'}
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      You can enter your PIN as <span className="font-mono">ABCD1234EFGH5678</span> or <span className="font-mono">ABCD-1234-EFGH-5678</span>
-                    </p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Session <span className="text-red-500">*</span></label>
+                    <select name="session" value={form.session} onChange={handleChange}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#4169E1]"
+                      required>
+                      <option value="">— Session —</option>
+                      {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
+                </div>
 
-                  <button type="submit" disabled={loading}
-                    className="w-full bg-[#4169E1] hover:bg-[#2c4fc9] disabled:bg-[#a0aec0] text-white font-semibold py-3 rounded-md text-sm mt-1">
-                    {loading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        Verifying...
-                      </span>
-                    ) : 'Check Result →'}
-                  </button>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">PIN <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <input type={showPin ? 'text' : 'password'} name="pin_code" value={form.pin_code} onChange={handleChange}
+                      placeholder="Enter 16-character PIN"
+                      className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm font-mono uppercase pr-16 focus:outline-none focus:ring-2 focus:ring-[#4169E1]"
+                      required autoComplete="off" />
+                    <button type="button" onClick={() => setShowPin(!showPin)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs font-medium">
+                      {showPin ? 'HIDE' : 'SHOW'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">Enter with or without dashes, e.g. <span className="font-mono">ABCD1234EFGH5678</span></p>
+                </div>
 
-                  <p className="text-center text-sm text-gray-500 pt-1">
-                    Don&apos;t have a PIN?{' '}
-                    <Link href="/buy-pin" className="text-[#4169E1] hover:underline font-medium">Buy one here →</Link>
-                  </p>
-                </form>
-              </div>
+                <button type="submit" disabled={loading}
+                  className="w-full bg-[#4169E1] hover:bg-[#2c4fc9] disabled:bg-[#a0aec0] text-white font-semibold py-3 rounded-md text-sm mt-1">
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Verifying...
+                    </span>
+                  ) : 'Check Result →'}
+                </button>
+
+                <p className="text-center text-sm text-gray-500 pt-1">
+                  Don&apos;t have a PIN?{' '}
+                  <Link href="/buy-pin" className="text-[#4169E1] hover:underline font-medium">Buy one here →</Link>
+                </p>
+              </form>
             </div>
-
           </div>
+
         </div>
       </main>
 
       <footer className="bg-[#1a1a2e] text-gray-400 text-xs text-center py-4 px-4 mt-4">
         <p className="font-garamond text-[#FFD700] text-sm mb-1">Rehoboth College</p>
         <p>Official Academic Result Portal</p>
-        <p className="mt-1">© {new Date().getFullYear()} Rehoboth College. All rights reserved.</p>
+        <p className="mt-1">© {new Date().getFullYear()} Rehoboth College. Powered by JayP Technologies.</p>
       </footer>
     </div>
   );
