@@ -141,6 +141,8 @@ export interface VerifyResponse {
   student: Pick<Student, 'id' | 'admission_no' | 'full_name' | 'class'>;
   result: { term: string; session: string };
   signed_url: string;
+  pin_usage_count: number;
+  pin_usage_limit: number;
 }
 
 export interface MasterVerifyResponse {
