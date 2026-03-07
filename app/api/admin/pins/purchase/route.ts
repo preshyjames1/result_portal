@@ -31,12 +31,11 @@ export async function POST(request: NextRequest) {
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '');
 
   if (!siteUrl) {
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    return NextResponse.json({ error: 'Server configuration error: NEXT_PUBLIC_SITE_URL not set' }, { status: 500 });
   }
 
   const supabase = createSupabaseServer();
   const reference = `RHB-BULK-${randomBytes(8).toString('hex').toUpperCase()}`;
-  // After payment, redirect back to the pins page with a success flag
   const callbackUrl = `${siteUrl}/school-admin/pins?payment=success&ref=${reference}`;
 
   try {
@@ -46,33 +45,55 @@ export async function POST(request: NextRequest) {
       reference,
       callback_url: callbackUrl,
       metadata: {
-        // quantity stored as string because Paystack metadata values must be strings
         quantity: String(qty),
         term,
         session: academicSession,
-        // Mark as bulk/admin purchase so webhook knows to email all pins to this address
         purchase_type: 'admin_bulk',
         admin_email: email,
-        // admission_no not relevant for admin bulk — set empty
-        admission_no: '',
-        full_name: `Rehoboth College Admin (${qty} PIN${qty > 1 ? 's' : ''})`,
+        // admission_no must be a non-empty string — use placeholder for admin bulk purchases
+        admission_no: 'ADMIN-BULK',
+        full_name: `Admin Bulk Purchase (${qty} PIN${qty > 1 ? 's' : ''})`,
         phone: '',
       },
     });
 
-    // Store pending transaction
-    await supabase.from('transactions').insert({
+    const authUrl = paystackResponse.data.authorization_url;
+
+    // Insert transaction — admission_no is required NOT NULL in DB so we use placeholder
+    // authorization_url column requires migration.sql to be run first (see fix9/migration.sql)
+    const { error: insertError } = await supabase.from('transactions').insert({
       reference,
       email,
       phone: null,
-      admission_no: null,
+      admission_no: 'ADMIN-BULK',   // ← placeholder; NOT NULL column requires a value
       amount: totalAmount,
       status: 'pending',
-      authorization_url: paystackResponse.data.authorization_url,
+      authorization_url: authUrl,   // ← requires migration.sql
     });
 
+    if (insertError) {
+      // If authorization_url column missing, retry without it
+      if (insertError.message?.includes('authorization_url')) {
+        const { error: retryError } = await supabase.from('transactions').insert({
+          reference,
+          email,
+          phone: null,
+          admission_no: 'ADMIN-BULK',
+          amount: totalAmount,
+          status: 'pending',
+        });
+        if (retryError) {
+          console.error('Transaction insert failed (retry):', retryError);
+          return NextResponse.json({ error: 'Failed to record transaction' }, { status: 500 });
+        }
+      } else {
+        console.error('Transaction insert failed:', insertError);
+        return NextResponse.json({ error: 'Failed to record transaction' }, { status: 500 });
+      }
+    }
+
     return NextResponse.json({
-      authorization_url: paystackResponse.data.authorization_url,
+      authorization_url: authUrl,
       reference,
     });
   } catch (err) {
