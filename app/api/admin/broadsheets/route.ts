@@ -98,7 +98,9 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ broadsheet: data }, { status: 201 });
 }
 
-// DELETE — remove a broadsheet
+// DELETE — remove one or many broadsheets (and their PDFs from storage)
+// Single:  DELETE /api/admin/broadsheets?id=xxx
+// Bulk:    DELETE /api/admin/broadsheets?ids=a,b,c
 export async function DELETE(request: NextRequest) {
   try { await requireAdmin(); } catch {
     return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
@@ -106,27 +108,24 @@ export async function DELETE(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
-  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+  const ids = searchParams.get('ids');
+
+  if (!id && !ids) return NextResponse.json({ error: 'id or ids required' }, { status: 400 });
 
   const supabase = createSupabaseServer();
+  const idList = ids ? ids.split(',').map(s => s.trim()).filter(Boolean) : [id!];
 
-  // Get path first so we can remove the file too
-  const { data: sheet, error: fetchErr } = await supabase
-    .from('broadsheets')
-    .select('pdf_path')
-    .eq('id', id)
-    .single();
+  // Fetch pdf_paths for storage cleanup
+  const { data: rows } = await supabase.from('broadsheets').select('pdf_path').in('id', idList);
+  const paths = (rows ?? []).map((r: { pdf_path: string }) => r.pdf_path).filter(Boolean);
+  if (paths.length > 0) {
+    await supabase.storage.from('results').remove(paths);
+  }
 
-  if (fetchErr || !sheet) return NextResponse.json({ error: 'Broadsheet not found' }, { status: 404 });
+  const { error } = await supabase.from('broadsheets').delete().in('id', idList);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Delete from storage
-  await supabase.storage.from('results').remove([sheet.pdf_path]);
-
-  // Delete from DB
-  const { error: delErr } = await supabase.from('broadsheets').delete().eq('id', id);
-  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
-
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, deleted: idList.length });
 }
 
 // GET signed URL for viewing — called from UI with ?view=id

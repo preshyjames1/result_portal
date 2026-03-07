@@ -21,6 +21,7 @@ export default function AdminStudentsPage() {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -139,6 +140,15 @@ export default function AdminStudentsPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (!selectedIds.size) return;
+    if (!confirm(`Delete ${selectedIds.size} student${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    const ids = Array.from(selectedIds).join(',');
+    await fetch(`/api/admin/students?ids=${ids}`, { method: 'DELETE' });
+    setSelectedIds(new Set());
+    fetchStudents();
+  };
+
   const totalPages = Math.ceil(total / 20);
 
   return (
@@ -214,6 +224,20 @@ export default function AdminStudentsPage() {
         </p>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 flex items-center gap-3 flex-wrap">
+          <span className="text-sm text-blue-700 font-medium">{selectedIds.size} selected</span>
+          <button onClick={handleBulkDelete}
+            className="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-1.5 rounded-md">
+            Delete Selected
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} className="text-gray-500 text-xs hover:text-gray-700 ml-auto">
+            Clear selection
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {loading ? (
@@ -235,6 +259,11 @@ export default function AdminStudentsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="px-4 py-3 w-8">
+                    <input type="checkbox" className="rounded"
+                      checked={selectedIds.size === students.length && students.length > 0}
+                      onChange={(e) => setSelectedIds(e.target.checked ? new Set(students.map(s => s.id)) : new Set())} />
+                  </th>
                   {['Admission No', 'Full Name', 'Class', 'Email', 'Phone', 'Actions'].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       {h}
@@ -245,6 +274,10 @@ export default function AdminStudentsPage() {
               <tbody className="divide-y divide-gray-100">
                 {students.map((student) => (
                   <tr key={student.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <input type="checkbox" className="rounded" checked={selectedIds.has(student.id)}
+                        onChange={() => { const n = new Set(selectedIds); n.has(student.id) ? n.delete(student.id) : n.add(student.id); setSelectedIds(n); }} />
+                    </td>
                     <td className="px-4 py-3 font-mono-custom text-xs font-medium text-[#4169E1]">
                       {student.admission_no}
                     </td>

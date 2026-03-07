@@ -115,7 +115,12 @@ export async function PATCH(request: NextRequest) {
   return NextResponse.json({ pin: data });
 }
 
-// DELETE — remove pin
+// DELETE — remove one or many pins
+// Single:  DELETE /api/admin/pins?id=xxx
+// Bulk:    DELETE /api/admin/pins?ids=a,b,c
+//
+// Nulls transactions.pin_id before deletion to avoid FK constraint failure.
+// (The migration sets ON DELETE SET NULL, but this double-clears for safety.)
 export async function DELETE(request: NextRequest) {
   try {
     await requireAdmin();
@@ -125,14 +130,19 @@ export async function DELETE(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
+  const ids = searchParams.get('ids');
 
-  if (!id) return NextResponse.json({ error: 'PIN ID required' }, { status: 400 });
+  if (!id && !ids) return NextResponse.json({ error: 'id or ids required' }, { status: 400 });
 
   const supabase = createSupabaseServer();
+  const idList = ids ? ids.split(',').map(s => s.trim()).filter(Boolean) : [id!];
 
-  const { error } = await supabase.from('pins').delete().eq('id', id);
+  // Null out any transaction references first (belt-and-suspenders alongside migration)
+  await supabase.from('transactions').update({ pin_id: null }).in('pin_id', idList);
 
+  // Now delete the pins
+  const { error } = await supabase.from('pins').delete().in('id', idList);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, deleted: idList.length });
 }

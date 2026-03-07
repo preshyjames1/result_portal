@@ -46,6 +46,24 @@ function PinsPageContent() {
   const [filterTerm, setFilterTerm] = useState('');
   const [filterSession, setFilterSession] = useState('');
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const handleBulkDelete = async () => {
+    if (!selectedIds.size) return;
+    if (!confirm(`Delete ${selectedIds.size} PIN${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    await fetch(`/api/admin/pins?ids=${Array.from(selectedIds).join(',')}`, { method: 'DELETE' });
+    setSelectedIds(new Set());
+    fetchPins();
+  };
+
+  const handleBulkToggle = async (active: boolean) => {
+    if (!selectedIds.size) return;
+    await Promise.all(Array.from(selectedIds).map(id =>
+      fetch('/api/admin/pins', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, is_active: active }) })
+    ));
+    setSelectedIds(new Set());
+    fetchPins();
+  };
 
   const totalAmount = buyForm.quantity * PIN_UNIT_PRICE;
 
@@ -255,6 +273,15 @@ function PinsPageContent() {
             <button onClick={fetchPins} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50">Refresh</button>
           </div>
 
+          {selectedIds.size > 0 && (
+            <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 flex items-center gap-3 flex-wrap">
+              <span className="text-sm text-blue-700 font-medium">{selectedIds.size} selected</span>
+              <button onClick={() => handleBulkToggle(true)} className="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-md">Activate</button>
+              <button onClick={() => handleBulkToggle(false)} className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-medium px-3 py-1.5 rounded-md">Deactivate</button>
+              <button onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-1.5 rounded-md">Delete Selected</button>
+              <button onClick={() => setSelectedIds(new Set())} className="text-gray-500 text-xs hover:text-gray-700 ml-auto">Clear selection</button>
+            </div>
+          )}
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             {loading ? (
               <div className="flex items-center justify-center py-12">
@@ -274,6 +301,11 @@ function PinsPageContent() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
+                      <th className="px-4 py-3 w-8">
+                        <input type="checkbox" className="rounded"
+                          checked={selectedIds.size === pins.length && pins.length > 0}
+                          onChange={(e) => setSelectedIds(e.target.checked ? new Set(pins.map(p => p.id)) : new Set())} />
+                      </th>
                       {['PIN Code', 'Term', 'Session', 'Usage', 'Claimed By', 'Status', 'Action'].map((h) => (
                         <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
@@ -282,6 +314,10 @@ function PinsPageContent() {
                   <tbody className="divide-y divide-gray-100">
                     {pins.map((pin) => (
                       <tr key={pin.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <input type="checkbox" className="rounded" checked={selectedIds.has(pin.id)}
+                            onChange={() => { const n = new Set(selectedIds); n.has(pin.id) ? n.delete(pin.id) : n.add(pin.id); setSelectedIds(n); }} />
+                        </td>
                         <td className="px-4 py-3 font-mono text-xs font-semibold text-[#1a1a2e] tracking-wider">{formatPin(pin.pin_code)}</td>
                         <td className="px-4 py-3 text-gray-600 text-xs">{pin.term}</td>
                         <td className="px-4 py-3 text-gray-600 text-xs">{pin.session}</td>

@@ -83,6 +83,15 @@ export default function AdminResultsPage() {
   const [bsUploading, setBsUploading] = useState(false);
   const [bsMsg, setBsMsg] = useState('');
   const [bsViewTarget, setBsViewTarget] = useState<Broadsheet | null>(null);
+  const [bsSelectedIds, setBsSelectedIds] = useState<Set<string>>(new Set());
+
+  const handleBsBulkDelete = async () => {
+    if (!bsSelectedIds.size) return;
+    if (!confirm(`Delete ${bsSelectedIds.size} broadsheet${bsSelectedIds.size > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    await fetch(`/api/admin/broadsheets?ids=${Array.from(bsSelectedIds).join(',')}`, { method: 'DELETE' });
+    setBsSelectedIds(new Set());
+    fetchBroadsheets();
+  };
   const [bsViewUrl, setBsViewUrl] = useState('');
   const [bsViewLoading, setBsViewLoading] = useState(false);
   const [bsViewError, setBsViewError] = useState('');
@@ -534,6 +543,13 @@ export default function AdminResultsPage() {
             ))}
             <button onClick={fetchBroadsheets} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50">Refresh</button>
           </div>
+          {bsSelectedIds.size > 0 && (
+            <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 flex items-center gap-3 flex-wrap">
+              <span className="text-sm text-blue-700 font-medium">{bsSelectedIds.size} selected</span>
+              <button onClick={handleBsBulkDelete} className="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-1.5 rounded-md">Delete Selected</button>
+              <button onClick={() => setBsSelectedIds(new Set())} className="text-gray-500 text-xs hover:text-gray-700 ml-auto">Clear selection</button>
+            </div>
+          )}
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             {bsLoading ? (
               <div className="flex items-center justify-center py-12"><Spinner /></div>
@@ -547,6 +563,11 @@ export default function AdminResultsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
+                      <th className="px-4 py-3 w-8">
+                        <input type="checkbox" className="rounded"
+                          checked={bsSelectedIds.size === broadsheets.length && broadsheets.length > 0}
+                          onChange={(e) => setBsSelectedIds(e.target.checked ? new Set(broadsheets.map(b => b.id)) : new Set())} />
+                      </th>
                       {['Class', 'Type', 'Term', 'Session', 'Date', 'Actions'].map((h) => (
                         <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
@@ -555,6 +576,10 @@ export default function AdminResultsPage() {
                   <tbody className="divide-y divide-gray-100">
                     {broadsheets.map((bs) => (
                       <tr key={bs.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <input type="checkbox" className="rounded" checked={bsSelectedIds.has(bs.id)}
+                            onChange={() => { const n = new Set(bsSelectedIds); n.has(bs.id) ? n.delete(bs.id) : n.add(bs.id); setBsSelectedIds(n); }} />
+                        </td>
                         <td className="px-4 py-3 font-semibold text-[#1a1a2e]">{bs.class}</td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${

@@ -153,7 +153,9 @@ export async function PATCH(request: NextRequest) {
   return NextResponse.json({ student: data });
 }
 
-// DELETE — remove student
+// DELETE — remove one or many students
+// Single:  DELETE /api/admin/students?id=xxx
+// Bulk:    DELETE /api/admin/students?ids=a,b,c
 export async function DELETE(request: NextRequest) {
   try {
     await requireAdmin();
@@ -163,14 +165,15 @@ export async function DELETE(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
+  const ids = searchParams.get('ids');
 
-  if (!id) return NextResponse.json({ error: 'Student ID required' }, { status: 400 });
+  if (!id && !ids) return NextResponse.json({ error: 'id or ids required' }, { status: 400 });
 
   const supabase = createSupabaseServer();
+  const idList = ids ? ids.split(',').map(s => s.trim()).filter(Boolean) : [id!];
 
-  const { error } = await supabase.from('students').delete().eq('id', id);
-
+  const { error } = await supabase.from('students').delete().in('id', idList);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, deleted: idList.length });
 }

@@ -262,7 +262,9 @@ export async function PATCH(request: NextRequest) {
   return NextResponse.json({ result: data });
 }
 
-// DELETE — remove result and PDF from storage
+// DELETE — remove one or many results (and their PDFs from storage)
+// Single:  DELETE /api/admin/results?id=xxx
+// Bulk:    DELETE /api/admin/results?ids=a,b,c
 export async function DELETE(request: NextRequest) {
   try {
     await requireAdmin();
@@ -272,23 +274,22 @@ export async function DELETE(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
+  const ids = searchParams.get('ids');
 
-  if (!id) return NextResponse.json({ error: 'Result ID required' }, { status: 400 });
+  if (!id && !ids) return NextResponse.json({ error: 'id or ids required' }, { status: 400 });
 
   const supabase = createSupabaseServer();
+  const idList = ids ? ids.split(',').map(s => s.trim()).filter(Boolean) : [id!];
 
-  const { data: result } = await supabase
-    .from('results')
-    .select('pdf_path')
-    .eq('id', id)
-    .single();
-
-  if (result?.pdf_path) {
-    await supabase.storage.from('results').remove([result.pdf_path]);
+  // Fetch all pdf_paths so we can remove files from storage
+  const { data: rows } = await supabase.from('results').select('pdf_path').in('id', idList);
+  const paths = (rows ?? []).map((r: { pdf_path: string }) => r.pdf_path).filter(Boolean);
+  if (paths.length > 0) {
+    await supabase.storage.from('results').remove(paths);
   }
 
-  const { error } = await supabase.from('results').delete().eq('id', id);
+  const { error } = await supabase.from('results').delete().in('id', idList);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, deleted: idList.length });
 }
