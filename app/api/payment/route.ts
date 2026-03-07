@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
       amount, status: 'pending',
     });
 
-    return NextResponse.json({ access_code: paystackResponse.data.access_code, reference });
+    return NextResponse.json({ access_code: paystackResponse.data.access_code, authorization_url: paystackResponse.data.authorization_url, reference });
   } catch (error) {
     console.error('Paystack init error:', error);
     return NextResponse.json({ error: 'Payment initialization failed' }, { status: 500 });
