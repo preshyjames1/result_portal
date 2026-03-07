@@ -177,8 +177,37 @@ export async function POST(request: NextRequest) {
   }
 
   const amount = parseInt(process.env.PIN_PRICE_KOBO ?? '50000', 10);
+  // Use whichever site URL env var is set
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '');
+
+  if (!siteUrl) {
+    console.error('NEXT_PUBLIC_SITE_URL is not set');
+    return NextResponse.json({ error: 'Server configuration error. Please contact the school.' }, { status: 500 });
+  }
+
+  // Idempotency: if a pending transaction already exists for this email+term+session
+  // created within the last 10 minutes, reuse it instead of creating a duplicate.
+  // This prevents "Duplicate Transaction Reference" errors caused by network retries.
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data: existingTx } = await supabase
+    .from('transactions')
+    .select('reference, authorization_url')
+    .eq('email', email)
+    .eq('status', 'pending')
+    .gte('created_at', tenMinutesAgo)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (existingTx?.authorization_url) {
+    return NextResponse.json({
+      authorization_url: existingTx.authorization_url,
+      reference: existingTx.reference,
+    });
+  }
+
   const reference = `RHB-${randomBytes(8).toString('hex').toUpperCase()}`;
-  const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/payment/callback?reference=${reference}`;
+  const callbackUrl = `${siteUrl}/payment/callback?reference=${reference}`;
 
   try {
     const paystackResponse = await initializePaystackTransaction({
@@ -190,9 +219,14 @@ export async function POST(request: NextRequest) {
       reference, email, phone: phone ?? null,
       admission_no: admission_no.trim().toUpperCase(),
       amount, status: 'pending',
+      authorization_url: paystackResponse.data.authorization_url,
     });
 
-    return NextResponse.json({ access_code: paystackResponse.data.access_code, authorization_url: paystackResponse.data.authorization_url, reference });
+    return NextResponse.json({
+      access_code: paystackResponse.data.access_code,
+      authorization_url: paystackResponse.data.authorization_url,
+      reference,
+    });
   } catch (error) {
     console.error('Paystack init error:', error);
     return NextResponse.json({ error: 'Payment initialization failed' }, { status: 500 });
