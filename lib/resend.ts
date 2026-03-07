@@ -13,7 +13,18 @@ interface SendPinEmailParams {
 
 export async function sendPinEmail(params: SendPinEmailParams): Promise<void> {
   const { to, full_name, pin_code, admission_no, term, session } = params;
-  const portalUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  // Support both env var names — whichever is set in Vercel
+  const fromAddress = process.env.RESEND_FROM_EMAIL ?? process.env.EMAIL_FROM;
+  // Support both site URL env var names
+  const portalUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '');
+
+  if (!fromAddress) {
+    throw new Error('Email from address not configured (set RESEND_FROM_EMAIL in Vercel)');
+  }
+
+  // Format PIN with dashes for readability in the email: ABCD-1234-EFGH-5678
+  const formattedPin = pin_code.replace(/(.{4})/g, '$1-').slice(0, -1);
 
   const htmlBody = `
 <!DOCTYPE html>
@@ -37,7 +48,7 @@ export async function sendPinEmail(params: SendPinEmailParams): Promise<void> {
     .steps li { margin: 6px 0; font-size: 14px; }
     .warning { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 12px 16px; font-size: 13px; margin: 16px 0; }
     .footer { background: #1a1a2e; color: #aaa; padding: 16px 32px; text-align: center; font-size: 12px; }
-    .btn { display: inline-block; background: #4169E1; color: #fff; text-decoration: none; padding: 12px 28px; border-radius: 4px; font-size: 15px; margin: 16px 0; }
+    .btn { display: inline-block; background: #4169E1; color: #fff !important; text-decoration: none; padding: 12px 28px; border-radius: 4px; font-size: 15px; margin: 16px 0; }
   </style>
 </head>
 <body>
@@ -51,8 +62,9 @@ export async function sendPinEmail(params: SendPinEmailParams): Promise<void> {
       <p>Your result checking PIN has been generated successfully. Please keep this PIN confidential.</p>
 
       <div class="pin-box">
-        <p style="margin:0 0 8px; color:#666; font-size:13px; text-transform:uppercase; letter-spacing:1px;">Your PIN</p>
-        <div class="pin-code">${pin_code}</div>
+        <p style="margin:0 0 8px; color:#666; font-size:13px; text-transform:uppercase; letter-spacing:1px;">Your Result PIN</p>
+        <div class="pin-code">${formattedPin}</div>
+        <p style="margin:8px 0 0; color:#888; font-size:12px;">You may also enter it without dashes: ${pin_code}</p>
       </div>
 
       <table class="info-table">
@@ -65,10 +77,10 @@ export async function sendPinEmail(params: SendPinEmailParams): Promise<void> {
       <div class="steps">
         <strong>How to check your result:</strong>
         <ol>
-          <li>Visit the result portal at <a href="${portalUrl}">${portalUrl}</a></li>
+          <li>Visit <a href="${portalUrl}">${portalUrl}</a></li>
           <li>Enter your Admission Number: <strong>${admission_no}</strong></li>
+          <li>Select your Class, Term (<strong>${term}</strong>) and Session (<strong>${session}</strong>)</li>
           <li>Enter the PIN above</li>
-          <li>Select Term and Session</li>
           <li>Click "Check Result"</li>
         </ol>
       </div>
@@ -81,7 +93,7 @@ export async function sendPinEmail(params: SendPinEmailParams): Promise<void> {
         • PIN is non-refundable once issued.
       </div>
 
-      <a href="${portalUrl}" class="btn">Check My Result →</a>
+      ${portalUrl ? `<a href="${portalUrl}" class="btn">Check My Result →</a>` : ''}
     </div>
     <div class="footer">
       Rehoboth College — Official Result Portal<br>
@@ -92,10 +104,15 @@ export async function sendPinEmail(params: SendPinEmailParams): Promise<void> {
 </html>
   `.trim();
 
-  await resend.emails.send({
-    from: process.env.EMAIL_FROM!,
+  const result = await resend.emails.send({
+    from: fromAddress,
     to,
-    subject: 'Your Rehoboth College Result Checking PIN',
+    subject: `Your Rehoboth College Result PIN — ${term} ${session}`,
     html: htmlBody,
   });
+
+  // Surface any Resend errors so they appear in Vercel logs
+  if (result.error) {
+    throw new Error(`Resend error: ${JSON.stringify(result.error)}`);
+  }
 }
