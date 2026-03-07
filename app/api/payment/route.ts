@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServer } from '@/lib/supabase-server';
 import { initializePaystackTransaction, verifyPaystackTransaction, verifyPaystackWebhookSignature } from '@/lib/paystack';
 import { generatePin } from '@/lib/pin-generator';
-import { sendPinEmail } from '@/lib/resend';
+import { sendPinEmail, sendBulkPinEmail } from '@/lib/resend';
 import { randomBytes } from 'crypto';
 
 // ─────────────────────────────────────────────
@@ -103,38 +103,54 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    const { admission_no, full_name, term, session } = data.metadata;
+    const { admission_no, full_name, term, session, purchase_type, quantity } = data.metadata as {
+      admission_no: string; full_name: string; term: string; session: string;
+      purchase_type?: string; quantity?: string;
+    };
 
-    let pinCode: string = '';
-    let attempts = 0;
-    do {
-      pinCode = generatePin();
-      const { data: existing } = await supabase
+    const isAdminBulk = purchase_type === 'admin_bulk';
+    const qty = isAdminBulk ? Math.max(1, Math.min(200, parseInt(quantity ?? '1', 10))) : 1;
+
+    // Generate qty PINs
+    const generatedPins: string[] = [];
+    for (let i = 0; i < qty; i++) {
+      let pinCode = '';
+      let attempts = 0;
+      do {
+        pinCode = generatePin();
+        const { data: existing } = await supabase
+          .from('pins')
+          .select('id')
+          .eq('pin_code', pinCode)
+          .single();
+        if (!existing) break;
+        attempts++;
+      } while (attempts < 10);
+
+      const { data: newPin, error: pinErr } = await supabase
         .from('pins')
+        .insert({ pin_code: pinCode, usage_limit: 5, usage_count: 0, is_active: true, claimed_by_student_id: null, term, session })
         .select('id')
-        .eq('pin_code', pinCode)
         .single();
-      if (!existing) break;
-      attempts++;
-    } while (attempts < 10);
 
-    const { data: newPin, error: pinErr } = await supabase
-      .from('pins')
-      .insert({ pin_code: pinCode, usage_limit: 5, usage_count: 0, is_active: true, claimed_by_student_id: null, term, session })
-      .select('id')
-      .single();
+      if (!pinErr && newPin) generatedPins.push(pinCode);
+    }
 
-    if (pinErr || !newPin) {
+    if (generatedPins.length === 0) {
       return NextResponse.json({ received: true });
     }
 
     await supabase
       .from('transactions')
-      .update({ status: 'success', pin_id: newPin.id, paid_at: data.paid_at })
+      .update({ status: 'success', paid_at: data.paid_at })
       .eq('id', transaction.id);
 
     try {
-      await sendPinEmail({ to: data.customer.email, full_name: full_name ?? admission_no, pin_code: pinCode, admission_no, term, session });
+      if (isAdminBulk) {
+        await sendBulkPinEmail({ to: data.customer.email, pins: generatedPins, term, session, quantity: qty });
+      } else {
+        await sendPinEmail({ to: data.customer.email, full_name: full_name ?? admission_no, pin_code: generatedPins[0], admission_no, term, session });
+      }
     } catch (emailErr) {
       console.error('Email send failed:', emailErr);
     }
@@ -177,37 +193,8 @@ export async function POST(request: NextRequest) {
   }
 
   const amount = parseInt(process.env.PIN_PRICE_KOBO ?? '50000', 10);
-  // Use whichever site URL env var is set
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '');
-
-  if (!siteUrl) {
-    console.error('NEXT_PUBLIC_SITE_URL is not set');
-    return NextResponse.json({ error: 'Server configuration error. Please contact the school.' }, { status: 500 });
-  }
-
-  // Idempotency: if a pending transaction already exists for this email+term+session
-  // created within the last 10 minutes, reuse it instead of creating a duplicate.
-  // This prevents "Duplicate Transaction Reference" errors caused by network retries.
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-  const { data: existingTx } = await supabase
-    .from('transactions')
-    .select('reference, authorization_url')
-    .eq('email', email)
-    .eq('status', 'pending')
-    .gte('created_at', tenMinutesAgo)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  if (existingTx?.authorization_url) {
-    return NextResponse.json({
-      authorization_url: existingTx.authorization_url,
-      reference: existingTx.reference,
-    });
-  }
-
   const reference = `RHB-${randomBytes(8).toString('hex').toUpperCase()}`;
-  const callbackUrl = `${siteUrl}/payment/callback?reference=${reference}`;
+  const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/payment/callback?reference=${reference}`;
 
   try {
     const paystackResponse = await initializePaystackTransaction({
@@ -219,14 +206,9 @@ export async function POST(request: NextRequest) {
       reference, email, phone: phone ?? null,
       admission_no: admission_no.trim().toUpperCase(),
       amount, status: 'pending',
-      authorization_url: paystackResponse.data.authorization_url,
     });
 
-    return NextResponse.json({
-      access_code: paystackResponse.data.access_code,
-      authorization_url: paystackResponse.data.authorization_url,
-      reference,
-    });
+    return NextResponse.json({ access_code: paystackResponse.data.access_code, authorization_url: paystackResponse.data.authorization_url, reference });
   } catch (error) {
     console.error('Paystack init error:', error);
     return NextResponse.json({ error: 'Payment initialization failed' }, { status: 500 });

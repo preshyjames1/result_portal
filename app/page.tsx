@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import Image from 'next/image';
 
 const TERMS = ['First Term', 'Second Term', 'Third Term'];
@@ -16,17 +15,17 @@ const CLASSES = ['JSS 1', 'JSS 2', 'JSS 3', 'SS 1', 'SS 2', 'SS 3'];
 // ── Edit announcements here ──────────────────────────────────────────────
 const ANNOUNCEMENTS = [
   '📢 First Term 2025/2026 results are now available — check your result using your PIN.',
-  '📌 PINs can be purchased online — click "Buy a PIN" below to get yours instantly.',
   '⚠️ Ensure you use the correct Term and Session when checking your result.',
-  '📞 For enquiries, contact the school office during working hours.',
+  '📞 For enquiries or to obtain a result-checking PIN, contact the school office.',
   '🎓 Congratulations to all students on the completion of the First Term examinations.',
+  '📌 Your PIN is available from the school — keep it private and do not share it.',
 ];
 // ────────────────────────────────────────────────────────────────────────
 
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'Invalid admission number or PIN. Please check and try again.',
   PIN_INACTIVE: 'This PIN has been deactivated. Please contact the school.',
-  PIN_LIMIT_EXCEEDED: 'This PIN has reached its maximum usage limit.',
+  PIN_LIMIT_EXCEEDED: 'This PIN has reached its maximum usage limit. Contact the school for a new one.',
   PIN_BELONGS_TO_ANOTHER_STUDENT: 'This PIN belongs to another student.',
   NO_RESULT_FOUND: 'No result found for the selected term and session.',
   RESULT_NOT_YET_PUBLISHED: 'Results for this term have not been published yet. Please check back later.',
@@ -95,7 +94,7 @@ export default function HomePage() {
         .ticker:hover { animation-play-state: paused; }
       `}</style>
 
-      {/* ── Hero — centered logo + school identity ── */}
+      {/* Hero */}
       <header className="bg-gradient-to-b from-[#0f0f23] to-[#1a1a2e] text-white py-8 px-4">
         <div className="max-w-5xl mx-auto flex flex-row items-center justify-center gap-6 text-center">
           <Image src="/logo.png" alt="Rehoboth College Crest" width={105} height={105} className="drop-shadow-xl" priority />
@@ -122,7 +121,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* ── Announcement Ticker — blends with hero ── */}
+      {/* Announcement Ticker */}
       <div className="bg-[#0f0f23] text-[#FFD700] overflow-hidden py-2 select-none border-t border-white/10">
         <div className="flex">
           <span className="ticker whitespace-nowrap text-sm font-medium px-4 inline-block">
@@ -131,7 +130,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── Main 2-col layout ── */}
+      {/* Main 2-col layout */}
       <main className="flex-1 py-8 px-4">
         <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
 
@@ -143,7 +142,7 @@ export default function HomePage() {
               </div>
               <ol className="px-4 py-4 space-y-3">
                 {[
-                  { n: '1', title: 'Get your PIN', desc: 'Purchase from the school office or buy online via the link below.' },
+                  { n: '1', title: 'Get your PIN', desc: 'Collect your result-checking PIN from the school office.' },
                   { n: '2', title: 'Enter your details', desc: 'Fill in your Admission Number, Class, Term, and Session.' },
                   { n: '3', title: 'Enter your PIN', desc: 'Type your 16-character PIN — dashes are optional.' },
                   { n: '4', title: 'View your result', desc: 'Click "Check Result" to load your official result sheet.' },
@@ -169,17 +168,9 @@ export default function HomePage() {
               <div className="px-4 py-4 space-y-2.5 text-sm text-gray-600">
                 <p className="flex gap-2"><span className="text-[#4169E1] font-bold">▸</span>Each PIN allows <strong>5 views</strong> of a result.</p>
                 <p className="flex gap-2"><span className="text-[#4169E1] font-bold">▸</span>A PIN is <strong>locked to the first student</strong> who uses it — keep it private.</p>
-                <p className="flex gap-2"><span className="text-[#4169E1] font-bold">▸</span>PINs are <strong>term-specific</strong> — a First Term PIN won&apos;t work for Second Term.</p>
-                <p className="flex gap-2"><span className="text-[#4169E1] font-bold">▸</span>If your PIN is exhausted, purchase a new one below.</p>
+                <p className="flex gap-2"><span className="text-[#4169E1] font-bold">▸</span>PINs are <strong>term-specific</strong> — a First Term PIN only works for First Term results.</p>
+                <p className="flex gap-2"><span className="text-[#4169E1] font-bold">▸</span>Contact the school office if you need a replacement PIN.</p>
               </div>
-            </div>
-
-            <div className="bg-[#1a1a2e] rounded-lg px-4 py-4 text-center">
-              <p className="text-white text-sm font-semibold mb-1">Don&apos;t have a PIN yet?</p>
-              <p className="text-gray-400 text-xs mb-3">Purchase online and receive it instantly by email</p>
-              <Link href="/buy-pin" className="inline-block bg-[#FFD700] hover:bg-[#d4af00] text-[#1a1a2e] font-bold px-5 py-2.5 rounded-md text-sm">
-                Buy a PIN — ₦500
-              </Link>
             </div>
           </div>
 
@@ -264,11 +255,6 @@ export default function HomePage() {
                     </span>
                   ) : 'Check Result →'}
                 </button>
-
-                <p className="text-center text-sm text-gray-500 pt-1">
-                  Don&apos;t have a PIN?{' '}
-                  <Link href="/buy-pin" className="text-[#4169E1] hover:underline font-medium">Buy one here →</Link>
-                </p>
               </form>
             </div>
           </div>

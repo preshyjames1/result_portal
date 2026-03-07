@@ -5,11 +5,11 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-// School admin: ONLY students and results management
 const NAV_ITEMS = [
   { href: '/school-admin/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/school-admin/students', label: 'Students', icon: '👥' },
   { href: '/school-admin/results', label: 'Results', icon: '📄' },
+  { href: '/school-admin/pins', label: 'PIN Management', icon: '🔑' },
 ];
 
 export default function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
@@ -58,10 +58,6 @@ export default function SchoolAdminLayout({ children }: { children: React.ReactN
         </nav>
 
         <div className="px-3 py-3 border-t border-white/10">
-          <div className="px-3 py-2 mb-1">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Access Level</p>
-            <p className="text-xs text-gray-400 mt-1">Students &amp; Results only. PIN management is restricted to the super admin.</p>
-          </div>
           <button onClick={handleLogout} disabled={loggingOut}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-gray-400 hover:text-white hover:bg-white/10 text-left">
             <span>🚪</span>
