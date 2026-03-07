@@ -1,0 +1,160 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createSupabaseServer } from '@/lib/supabase-server';
+import { getAdminSession } from '@/lib/session';
+
+async function requireAdmin() {
+  const session = await getAdminSession();
+  if (!session) throw new Error('UNAUTHORIZED');
+  return session;
+}
+
+// GET — list broadsheets (optional filters: term, session, class, type)
+export async function GET(request: NextRequest) {
+  try { await requireAdmin(); } catch {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const term = searchParams.get('term');
+  const session = searchParams.get('session');
+  const cls = searchParams.get('class');
+  const type = searchParams.get('type');
+
+  const supabase = createSupabaseServer();
+
+  let query = supabase
+    .from('broadsheets')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false });
+
+  if (term) query = query.eq('term', term);
+  if (session) query = query.eq('session', session);
+  if (cls) query = query.eq('class', cls);
+  if (type) query = query.eq('type', type);
+
+  const { data, count, error } = await query;
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ broadsheets: data, total: count });
+}
+
+// POST — upload a broadsheet PDF
+export async function POST(request: NextRequest) {
+  try { await requireAdmin(); } catch {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
+  const formData = await request.formData();
+  const file = formData.get('file') as File | null;
+  const term = formData.get('term') as string;
+  const session = formData.get('session') as string;
+  const cls = formData.get('class') as string;
+  const type = formData.get('type') as string; // '1st_ca' | '2nd_ca' | 'exam' | 'combined'
+  const title = formData.get('title') as string | null;
+
+  if (!file || !term || !session || !cls || !type) {
+    return NextResponse.json({ error: 'file, term, session, class and type are required' }, { status: 400 });
+  }
+
+  if (file.type !== 'application/pdf') {
+    return NextResponse.json({ error: 'Only PDF files are allowed' }, { status: 400 });
+  }
+
+  const supabase = createSupabaseServer();
+
+  // Sanitise path segments
+  const safeCls = cls.replace(/\s+/g, '_');
+  const safeTerm = term.replace(/\s+/g, '_');
+  const safeSession = session.replace(/\//g, '-');
+  const pdfPath = `broadsheets/${safeSession}/${safeTerm}/${safeCls}/${type}.pdf`;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const { error: uploadError } = await supabase.storage
+    .from('results')
+    .upload(pdfPath, Buffer.from(arrayBuffer), {
+      contentType: 'application/pdf',
+      upsert: true, // overwrite if one already exists for same class/term/session/type
+    });
+
+  if (uploadError) {
+    return NextResponse.json({ error: uploadError.message }, { status: 500 });
+  }
+
+  // Upsert record (one broadsheet per class+term+session+type)
+  const { data, error: dbError } = await supabase
+    .from('broadsheets')
+    .upsert({
+      term,
+      session,
+      class: cls,
+      type,
+      pdf_path: pdfPath,
+      title: title || `${cls} — ${type.replace('_', ' ').toUpperCase()} (${term} ${session})`,
+    }, { onConflict: 'term,session,class,type' })
+    .select()
+    .single();
+
+  if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
+  return NextResponse.json({ broadsheet: data }, { status: 201 });
+}
+
+// DELETE — remove a broadsheet
+export async function DELETE(request: NextRequest) {
+  try { await requireAdmin(); } catch {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+  const supabase = createSupabaseServer();
+
+  // Get path first so we can remove the file too
+  const { data: sheet, error: fetchErr } = await supabase
+    .from('broadsheets')
+    .select('pdf_path')
+    .eq('id', id)
+    .single();
+
+  if (fetchErr || !sheet) return NextResponse.json({ error: 'Broadsheet not found' }, { status: 404 });
+
+  // Delete from storage
+  await supabase.storage.from('results').remove([sheet.pdf_path]);
+
+  // Delete from DB
+  const { error: delErr } = await supabase.from('broadsheets').delete().eq('id', id);
+  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+  return NextResponse.json({ success: true });
+}
+
+// GET signed URL for viewing — called from UI with ?view=id
+// Handled via a separate param on the same GET route
+export async function PATCH(request: NextRequest) {
+  try { await requireAdmin(); } catch {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const { id } = body;
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+  const supabase = createSupabaseServer();
+
+  const { data: sheet } = await supabase
+    .from('broadsheets')
+    .select('pdf_path')
+    .eq('id', id)
+    .single();
+
+  if (!sheet) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const { data: signed, error: signErr } = await supabase.storage
+    .from('results')
+    .createSignedUrl(sheet.pdf_path, 600); // 10 min
+
+  if (signErr || !signed) return NextResponse.json({ error: 'Could not generate URL' }, { status: 500 });
+
+  return NextResponse.json({ signed_url: signed.signedUrl });
+}
